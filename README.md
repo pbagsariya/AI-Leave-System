@@ -23,14 +23,23 @@ This is the simplified, single-laptop demo of the system in
 
 ```bash
 pip install -r backend/requirements.txt
-claude                       # one-time: log in with your Claude subscription
-                             # (or: ant auth login). Do NOT set ANTHROPIC_API_KEY.
 uvicorn backend.main:app --reload     # run from the repo root
 # open http://localhost:8000
 ```
 
-No subscription / offline? It still runs — the assistant falls back to a
-deterministic rule parser. Force that mode with `LEAVE_OFFLINE=1`.
+**AI is automatic — nothing to configure.** On startup the app tries Claude; if
+it's reachable it uses the model, otherwise it switches to a built-in
+deterministic parser for the session (and stops retrying). So:
+
+- **To use real Claude:** log in once with your subscription — `claude`
+  (or `ant auth login`). Do **not** set `ANTHROPIC_API_KEY`.
+- **Restricted / offline machine:** just run `uvicorn …` — it auto-falls back to
+  the offline parser. Set `LEAVE_OFFLINE=1` to skip the Claude probe entirely.
+
+Offline mode matches date *patterns* rather than free text — use clear formats
+like `11 August 2026`, `11/August/2026`, `11-Aug-2026`, `20/08/2026`, or a range
+`11 to 15 August 2026`. Vague phrases ("next month") are answered with a
+clarifying question. Real Claude handles all free-form phrasing.
 
 ## What you can do
 

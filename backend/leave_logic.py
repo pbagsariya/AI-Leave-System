@@ -250,14 +250,31 @@ def parse_with_rules(message: str, today: dt.date, tz: str) -> ParsedLeave:
     )
 
 
+# Cached availability of Claude: None = not tried yet, True/False = decided.
+# Avoids re-attempting (and re-failing) the LLM on every message once we know
+# it isn't reachable — no env var needed. LEAVE_OFFLINE=1 forces offline.
+_llm_available: Optional[bool] = None
+
+
 def parse_message(message: str, today: dt.date, tz: str = EMPLOYEE_TZ) -> ParsedLeave:
-    """Try Claude (subscription), fall back to the offline parser on any failure."""
-    if os.getenv("LEAVE_OFFLINE") == "1":
+    """Use Claude when available; otherwise the offline parser. The decision is
+    made once and cached, so you don't need to set anything to run offline."""
+    global _llm_available
+
+    if os.getenv("LEAVE_OFFLINE") == "1" or _llm_available is False:
         return parse_with_rules(message, today, tz)
+
     try:
-        return parse_with_llm(message, today, tz)
+        result = parse_with_llm(message, today, tz)
+        if _llm_available is None:
+            print("[leave_logic] Claude is available — using the model.")
+        _llm_available = True
+        return result
     except Exception as exc:  # not logged in / offline / SDK error
-        print(f"[leave_logic] LLM unavailable ({exc}); using offline parser")
+        if _llm_available is None:
+            print(f"[leave_logic] Claude unavailable ({exc}); using the offline "
+                  "parser for this session.")
+        _llm_available = False
         return parse_with_rules(message, today, tz)
 
 

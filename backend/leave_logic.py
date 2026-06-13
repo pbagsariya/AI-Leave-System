@@ -13,6 +13,7 @@ LEAVE_OFFLINE=1 to force the offline parser.
 
 from __future__ import annotations
 
+import calendar
 import datetime as dt
 import os
 import re
@@ -117,6 +118,65 @@ def parse_with_llm(message: str, today: dt.date, tz: str) -> ParsedLeave:
 # Offline rule-based fallback (deterministic; demo safety net).
 # --------------------------------------------------------------------------
 
+# Month name/abbrev -> number, longest names first so "march" beats "mar".
+_MONTHS = {}
+for _i in range(1, 13):
+    _MONTHS[calendar.month_name[_i].lower()] = _i
+    _MONTHS[calendar.month_abbr[_i].lower()] = _i
+_MONTH_ALT = "|".join(sorted((m for m in _MONTHS if m), key=len, reverse=True))
+_WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
+
+def _extract_dates(text: str, today: dt.date):
+    """Find all dates in the message and return (start, end). Handles absolute
+    dates ('11th August 2026', '11-Aug-2026', '11/08/2026', ISO), ranges, and
+    relative phrases ('today', 'tomorrow', weekday names)."""
+    t = text.lower()
+    found: list[tuple[int, dt.date]] = []
+
+    def add(pos: int, y: int, mo: int, d: int) -> None:
+        try:
+            found.append((pos, dt.date(y, mo, d)))
+        except ValueError:
+            pass
+
+    # ISO yyyy-mm-dd
+    for m in re.finditer(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b", t):
+        add(m.start(), int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    # dd Month yyyy  (11th august 2026 / 11-august-2026 / 11 aug 2026)
+    for m in re.finditer(r"\b(\d{1,2})(?:st|nd|rd|th)?[\s\-]*(" + _MONTH_ALT + r")[\s\-]*(\d{4})\b", t):
+        add(m.start(), int(m.group(3)), _MONTHS[m.group(2)], int(m.group(1)))
+    # Month dd yyyy  (august 11 2026 / august 11th, 2026)
+    for m in re.finditer(r"\b(" + _MONTH_ALT + r")[\s\-]+(\d{1,2})(?:st|nd|rd|th)?,?[\s\-]*(\d{4})\b", t):
+        add(m.start(), int(m.group(3)), _MONTHS[m.group(1)], int(m.group(2)))
+    # dd/mm/yyyy or dd-mm-yyyy (day-first, common outside the US)
+    for m in re.finditer(r"\b(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})\b", t):
+        add(m.start(), int(m.group(3)), int(m.group(2)), int(m.group(1)))
+    # relative
+    for m in re.finditer(r"\btoday\b", t):
+        found.append((m.start(), today))
+    for m in re.finditer(r"\btomorrow\b", t):
+        found.append((m.start(), today + dt.timedelta(days=1)))
+    for i, name in enumerate(_WEEKDAYS):
+        for m in re.finditer(r"\b" + name + r"\b", t):
+            ahead = (i - today.weekday()) % 7 or 7
+            found.append((m.start(), today + dt.timedelta(days=ahead)))
+
+    if not found:
+        return None, None
+    # unique by date, earliest text position wins; order by position
+    by_date: dict[dt.date, int] = {}
+    for pos, d in found:
+        if d not in by_date or pos < by_date[d]:
+            by_date[d] = pos
+    ordered = sorted(by_date.items(), key=lambda kv: kv[1])
+    start = ordered[0][0]
+    end = ordered[-1][0] if len(ordered) > 1 else None
+    if end is not None and end < start:
+        start, end = end, start
+    return start, end
+
+
 def parse_with_rules(message: str, today: dt.date, tz: str) -> ParsedLeave:
     text = message.lower()
 
@@ -132,31 +192,24 @@ def parse_with_rules(message: str, today: dt.date, tz: str) -> ParsedLeave:
     elif "comp" in text:
         code = "COMP_OFF"
 
-    weekdays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-    start: Optional[dt.date] = None
-    if "today" in text:
-        start = today
-    elif "tomorrow" in text:
-        start = today + dt.timedelta(days=1)
-    else:
-        for i, name in enumerate(weekdays):
-            if name in text:
-                ahead = (i - today.weekday()) % 7
-                ahead = ahead or 7
-                start = today + dt.timedelta(days=ahead)
-                break
+    start, end_explicit = _extract_dates(text, today)
 
     half_day = "half day" in text or "half-day" in text
     duration: Optional[float] = 0.5 if half_day else None
-    m = re.search(r"(\d+(?:\.\d+)?)\s*day", text)
+    m = re.search(r"(\d+(?:\.\d+)?)\s*days?\b", text)
     if m:
         duration = float(m.group(1))
-    elif duration is None and start is not None:
-        duration = 1.0
 
-    end = start
-    if start is not None and duration and duration > 1:
-        end = start + dt.timedelta(days=int(round(duration)) - 1)
+    if start is not None and end_explicit is not None and end_explicit > start:
+        # an explicit date range wins over any "N days" count
+        end = end_explicit
+        duration = float((end - start).days + 1)
+    elif start is not None:
+        if duration is None:
+            duration = 1.0
+        end = start + dt.timedelta(days=int(round(duration)) - 1) if duration > 1 else start
+    else:
+        end = None
 
     has_attachment = any(w in text for w in ("attach", "note", "certificate", ".pdf", "📎"))
 

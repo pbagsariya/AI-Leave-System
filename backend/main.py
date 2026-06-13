@@ -42,6 +42,10 @@ BAL_LABEL = {"SICK": "Sick", "CASUAL": "Casual", "EARNED": "Earned",
 CODE_LABEL = {"SICK": "Sick Leave", "CASUAL": "Casual Leave", "EARNED": "Earned Leave",
               "COMP_OFF": "Comp-off", "WFH": "Work From Home", "LOP": "Loss of Pay"}
 
+# Per-employee buffer of unresolved apply-leave messages, so a clarifying answer
+# combines with what was said earlier (demo stand-in for conversation history).
+PENDING: dict[str, list[str]] = {}
+
 
 @app.on_event("startup")
 def _startup() -> None:
@@ -128,22 +132,33 @@ def chat(body: ChatIn):
     bal = db.get_balances(emp)
     text = body.message.lower()
 
-    # quick deterministic intent routing (works even with the offline parser)
+    # quick deterministic intent routing (works even with the offline parser).
+    # These switch intent, so any half-finished apply-leave context is dropped.
     if any(w in text for w in ("balance", "how many", "leaves left", "remaining", "left")):
         if "leave" in text or "balance" in text or "remaining" in text or "left" in text:
+            PENDING.pop(emp, None)
             return {"reply_type": "balance", "balances": bal}
     status_word = next((s for s in ("approved", "pending", "cancelled") if s in text), None)
     if (any(w in text for w in ("history", "past leave", "past request", "previous", "recent request"))
             or (status_word and ("leave" in text or "request" in text))):
+        PENDING.pop(emp, None)
         items = db.get_history(emp)
         if status_word:
             items = [h for h in items if h["status"].lower() == status_word]
         return {"reply_type": "history", "history": items}
     if "cancel" in text:
+        PENDING.pop(emp, None)
         return _cancel(emp, text, bal)
+    if any(w in text for w in ("start over", "reset", "never mind", "nevermind")):
+        PENDING.pop(emp, None)
+        return {"reply_type": "clarification",
+                "question": "Sure, let's start fresh. What leave would you like to apply for?"}
 
-    # apply_leave path
-    parsed = L.parse_message(body.message, _today(emp))
+    # apply_leave path — accumulate turns so a clarifying answer combines with
+    # everything said earlier in this request.
+    PENDING.setdefault(emp, []).append(body.message)
+    combined = " ".join(PENDING[emp])
+    parsed = L.parse_message(combined, _today(emp))
 
     # honour the attach toggle from the UI (we send metadata only, not the file)
     if body.has_attachment:
@@ -151,19 +166,26 @@ def chat(body: ChatIn):
 
     # if the model itself classified a non-apply intent, route accordingly
     if parsed.intent == "check_balance":
+        PENDING.pop(emp, None)
         return {"reply_type": "balance", "balances": bal}
     if parsed.intent == "view_history":
+        PENDING.pop(emp, None)
         return {"reply_type": "history", "history": db.get_history(emp)}
 
     result = L.validate(parsed, bal)
-    db.write_audit(emp, body.message, parsed.model_dump(), result.model_dump())
+    db.write_audit(emp, combined, parsed.model_dump(), result.model_dump())
 
     if parsed.missing_or_ambiguous:
+        # keep the buffer so the next message adds to it
         return {"reply_type": "clarification",
                 "question": parsed.clarifying_question or "Could you give me a bit more detail?"}
 
     if not result.ok:
+        # keep the buffer (e.g. user attaches the certificate and re-sends)
         return {"reply_type": "policy_block", "message": result.errors[0]}
+
+    # fully resolved — clear the buffer; the draft now lives in `sessions`
+    PENDING.pop(emp, None)
 
     lr = parsed.leave_request
     same_day = lr.start_date == lr.end_date
@@ -197,6 +219,7 @@ def confirm(body: ConfirmIn):
         return {"error": "draft expired"}
 
     emp = draft["employee_id"]
+    PENDING.pop(emp, None)
     code = draft["code"]
     duration = draft["duration"] or 0
     bal = db.get_balances(emp)

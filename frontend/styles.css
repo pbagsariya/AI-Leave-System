@@ -1,0 +1,81 @@
+/* Small component layer for the mockup. Tailwind (CDN) handles the rest. */
+
+.bubble-bot {
+  background: #f1f5f9;
+  color: #1c2530;
+  border-radius: 4px 14px 14px 14px;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  max-width: 28rem;
+}
+.bubble-user {
+  background: #0f766e;
+  color: #fff;
+  border-radius: 14px 4px 14px 14px;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  max-width: 28rem;
+}
+
+.btn-primary {
+  background: #0f766e;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 9px;
+  transition: background .15s;
+}
+.btn-primary:hover { background: #0b544e; }
+
+.btn-ghost {
+  background: #fff;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 12px;
+  border-radius: 9px;
+  border: 1px solid #e2e8f0;
+  transition: background .15s;
+}
+.btn-ghost:hover { background: #f8fafc; }
+
+.badge { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+
+.chip {
+  font-size: 12px;
+  font-weight: 500;
+  color: #0b544e;
+  background: #eef5f4;
+  border: 1px solid #d6e8e5;
+  padding: 5px 11px;
+  border-radius: 999px;
+  transition: background .15s;
+}
+.chip:hover { background: #d6e8e5; }
+
+/* balances */
+.balance-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.balance-row > span { width: 64px; color: #64748b; }
+.balance-row > b { width: 20px; text-align: right; font-weight: 600; }
+.bar { flex: 1; height: 7px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+.bar > span { display: block; height: 100%; border-radius: 999px; }
+
+/* typing dots */
+.dot-typing {
+  width: 6px; height: 6px; border-radius: 50%; background: #94a3b8;
+  display: inline-block; position: relative;
+  animation: blink 1s infinite .2s;
+}
+.dot-typing::before, .dot-typing::after {
+  content: ''; position: absolute; top: 0; width: 6px; height: 6px; border-radius: 50%; background: #94a3b8;
+}
+.dot-typing::before { left: -10px; animation: blink 1s infinite 0s; }
+.dot-typing::after { left: 10px; animation: blink 1s infinite .4s; }
+@keyframes blink { 0%,100% { opacity: .25; } 50% { opacity: 1; } }
+
+/* thin scrollbar */
+#messages::-webkit-scrollbar { width: 8px; }
+#messages::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 999px; }

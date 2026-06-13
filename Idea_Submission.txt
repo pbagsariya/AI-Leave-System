@@ -1,0 +1,66 @@
+================================================================
+COGNIZANT GLOBAL ING HACKATHON 2026 - IDEA SUBMISSION
+Idea: AI Powered Conversational Leave Application Assistant
+================================================================
+
+NOTE: All text boxes allow only these characters: A-Za-z0-9 , . ? ! ( ) and space.
+No colons, hyphens, slashes, apostrophes, &, %, etc. The content below already
+respects this so it can be pasted directly without validation errors.
+
+----------------------------------------------------------------
+FIELD 1 - ADD AN OPPORTUNITY  (max 5000 chars, 15+ words recommended)
+----------------------------------------------------------------
+Applying for leave today is a manual and time consuming task. An employee must log into the HRMS portal, open the Apply or Schedule Leave page, manually select the start date, choose the correct absence name from a dropdown, type comments and upload any supporting document before submitting. This means many clicks and constant context switching away from the tools where employees already work such as Microsoft Teams. New joiners and field staff often pick the wrong leave type or miss a mandatory document, which creates rework for HR and managers. The process is slow on mobile, depends on remembering exact leave codes and gives no instant guidance on remaining balances or policy rules. Across a large workforce these small frictions add up to significant lost productivity and a poor employee experience. There is a clear opportunity to let employees request leave the way they naturally speak, directly inside the chat tool they already use every day, while keeping accuracy, approvals and compliance fully intact.
+
+----------------------------------------------------------------
+FIELD 2 - POST AN IDEA  (max 5000 chars)
+----------------------------------------------------------------
+The idea is an AI powered conversational assistant that lets an employee apply for leave by simply sending a natural language message in Microsoft Teams. For example an employee can type that they need two days of sick leave from tomorrow with a medical note attached. A Teams bot receives the message and identifies the employee automatically through corporate single sign on, so no separate login or form is needed.
+
+The message is passed to a Large Language Model which extracts the structured details the existing leave form requires. These details are the start date, the end date or duration, the leave type mapped to a valid absence code, the comments and whether a supporting document is attached. Relative phrases such as tomorrow or next Monday are resolved using the current date and the employee time zone. The model only fills a draft. It never decides policy and it never submits on its own.
+
+A deterministic rules layer then validates the draft against the HRMS. It confirms the leave code is valid, checks the available balance, detects overlaps with weekends holidays or existing leave and flags when a document is required, for example for longer sick leave. The bot then replies with a clear confirmation card showing the leave type, the resolved dates, the comment and the remaining balance, along with Confirm, Edit and Cancel buttons. Nothing is submitted until the employee taps Confirm.
+
+On confirmation the request is pushed into the existing leave system, either through an HRMS service or, where no service exists, through automation that drives the current Apply or Schedule Leave screen. The request then enters the same approval queue managers already use, so there is no change for approvers. If anything is unclear the assistant asks one short clarifying question rather than guessing, and if the AI or HRMS is unavailable it falls back to a link to the existing form so employees are never blocked.
+
+The design keeps a clean separation between the chat channel, the AI extraction layer and the HRMS connector. This means the same engine can later be offered through email as well, and the HRMS behind it can be replaced without touching the conversation experience. Sensitive health related details are handled within the approved tenant with minimal logging and a full audit trail of every request.
+
+OR--
+
+An AIpowered conversational assistant integrated with Microsoft Teams allows employees to apply for leave using natural language messages. The assistant identifies the employee through corporate single signon and extracts structured details from the message using a Large Language Model. A deterministic rules layer validates the draft against the HRMS, and the bot replies with a confirmation card showing leave details. Upon employee confirmation, the request is pushed into the existing leave system.
+
+----------------------------------------------------------------
+FIELD 3 - SELECT PROJECT  (pre-filled, leave as is)
+----------------------------------------------------------------
+Project ID   : 1000216677
+Project Name : ING BE - DP - Business Lending
+
+----------------------------------------------------------------
+FIELD 4 - UPLOAD FILES
+----------------------------------------------------------------
+Attach:
+  1. AI_Leave_System_Design.pdf   (full architecture and design document)
+  2. presentUI.JPG                (current leave form, shows the before state)
+
+----------------------------------------------------------------
+FIELD 5 - IDEA TITLE  (max 1000 chars)
+----------------------------------------------------------------
+AI Powered Conversational Leave Application Assistant on Microsoft Teams
+
+----------------------------------------------------------------
+FIELD 6 - BENEFICIARY OF THE IDEA  (radio: Client / Cognizant / Both)
+----------------------------------------------------------------
+Select: Both
+Reason: It improves the Cognizant employee leave process and is equally a
+reusable solution for the client (ING), since both run HRMS leave workflows
+that this AI pattern can simplify.
+
+----------------------------------------------------------------
+FIELD 7 - POTENTIAL BENEFITS  (max 1000 chars)
+----------------------------------------------------------------
+Faster leave requests, reduced from several minutes and many clicks to a single message in Teams. Higher accuracy because the AI maps the correct leave type while the system validates balances and required documents before submission, cutting errors and rework for HR and managers. Better employee experience through a natural mobile friendly conversation in a tool people already use, with instant guidance on balances and policy. No disruption to existing approvals, since requests flow into the same queue. The solution is reusable across the organisation and for the client, and the same AI engine can extend to other HR self service tasks. Strong compliance is maintained through confirmation before submit, validation done in code rather than the model, and a complete audit trail of every request.
+
+================================================================
+TIP: After pasting Field 2, you can run the portal Rephrase / Enhance /
+Evaluate buttons to nudge the Quality Index higher.
+================================================================

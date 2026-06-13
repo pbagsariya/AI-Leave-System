@@ -1,0 +1,439 @@
+/* ============================================================================
+ * Leave Assistant — Phase 2 frontend
+ * Interactive chat state wired against the frozen API contract.
+ * Flip USE_MOCK to false in Phase 3 to hit the real FastAPI backend; no other
+ * change needed (mockApi and realApi expose the same 5 methods).
+ * ==========================================================================*/
+
+const USE_MOCK = false;
+
+// Pinned "today" so the demo is repeatable (matches the design doc examples).
+const TODAY = new Date('2026-06-13T00:00:00'); // a Saturday
+
+// ---- presentation metadata -------------------------------------------------
+const BAL_META = {
+  SICK:     { label: 'Sick',     cap: 10, color: 'bg-brand-500'  },
+  CASUAL:   { label: 'Casual',   cap: 8,  color: 'bg-sky-500'    },
+  EARNED:   { label: 'Earned',   cap: 15, color: 'bg-violet-500' },
+  COMP_OFF: { label: 'Comp-off', cap: 5,  color: 'bg-amber-500'  },
+};
+const CODE_LABEL = { SICK:'Sick Leave', CASUAL:'Casual Leave', EARNED:'Earned Leave',
+                     COMP_OFF:'Comp-off', WFH:'Work From Home', LOP:'Loss of Pay' };
+const STATUS_BADGE = {
+  Pending:   'bg-amber-100 text-amber-700',
+  Approved:  'bg-emerald-100 text-emerald-700',
+  Cancelled: 'bg-slate-100 text-slate-500',
+};
+
+/* ============================================================================
+ * MOCK BACKEND — in-memory store + the 5 endpoints (same shapes as Phase 3).
+ * ==========================================================================*/
+const mockDB = {
+  employees: [
+    { id: 'e1', name: 'Asha Menon',  dept: 'Engineering' },
+    { id: 'e2', name: 'Ravi Kapoor', dept: 'Sales' },
+    { id: 'e3', name: 'Meera Iyer',  dept: 'Design' },
+  ],
+  balances: {
+    e1: { SICK: 8, CASUAL: 5, EARNED: 12, COMP_OFF: 2 },
+    e2: { SICK: 6, CASUAL: 7, EARNED: 9,  COMP_OFF: 1 },
+    e3: { SICK: 10, CASUAL: 4, EARNED: 14, COMP_OFF: 3 },
+  },
+  history: {
+    e1: [
+      { id: '#AB-10391', code:'SICK',   label:'Sick · 02 Jun',  status:'Approved' },
+      { id: '#AB-10355', code:'WFH',    label:'WFH · 28 May',   status:'Approved' },
+      { id: '#AB-10310', code:'CASUAL', label:'Casual · 19 May',status:'Cancelled' },
+    ],
+    e2: [ { id: '#AB-10288', code:'EARNED', label:'Earned · 10 May', status:'Approved' } ],
+    e3: [],
+  },
+  drafts: {}, // session_id -> parsed draft
+};
+
+const DOC_REQUIRED_OVER = { SICK: 2 };
+
+function fmtDate(d) {
+  return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+}
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+function newRequestId() { return '#AB-' + (10400 + Math.floor(Math.random()*599)); }
+
+// crude NL parser — stand-in for the Claude extraction (Phase 3 replaces this).
+function mockParse(message) {
+  const t = message.toLowerCase();
+  let code = null;
+  if (/\bwfh\b|work from home/.test(t)) code = 'WFH';
+  else if (/sick|fever|unwell|\bill\b|medical/.test(t)) code = 'SICK';
+  else if (/casual/.test(t)) code = 'CASUAL';
+  else if (/earned|privilege|vacation|family function|wedding/.test(t)) code = 'EARNED';
+  else if (/comp[- ]?off|comp\b/.test(t)) code = 'COMP_OFF';
+
+  const WD = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+  let start = null;
+  if (/today/.test(t)) start = new Date(TODAY);
+  else if (/tomorrow/.test(t)) start = addDays(TODAY, 1);
+  else {
+    for (let i=0;i<WD.length;i++) if (t.includes(WD[i])) {
+      let ahead = (i - TODAY.getDay() + 7) % 7; ahead = ahead || 7;
+      start = addDays(TODAY, ahead); break;
+    }
+  }
+
+  const half = /half[- ]?day/.test(t);
+  let duration = half ? 0.5 : null;
+  const m = t.match(/(\d+(?:\.\d+)?)\s*day/);
+  if (m) duration = parseFloat(m[1]);
+  else if (duration === null && start) duration = 1;
+
+  const hasAttachment = /attach|note|certificate|\.pdf|📎/.test(t);
+
+  const missing = [];
+  if (!start) missing.push('start_date');
+  if (!code)  missing.push('absence_code');
+  if (duration === null) missing.push('duration_days');
+
+  return { code, start, duration, half, hasAttachment, missing };
+}
+
+const mockApi = {
+  async employees() { return mockDB.employees; },
+  async balances(empId) { return mockDB.balances[empId]; },
+  async history(empId) { return mockDB.history[empId] || []; },
+
+  async chat({ employee_id, message, has_attachment }) {
+    await delay(550);
+    const t = message.toLowerCase();
+    const bal = mockDB.balances[employee_id];
+
+    // intent: check_balance
+    if (/balance|how many.*(leave|day)|leaves? (do i|left)|remaining/.test(t)) {
+      return { reply_type: 'balance', balances: bal };
+    }
+    // intent: view_history (with optional status filter)
+    const st = (t.match(/approved|pending|cancelled/) || [])[0];
+    if (/history|past (leave|request)|previous|recent request/.test(t) || (st && /leave|request/.test(t))) {
+      let items = mockDB.history[employee_id] || [];
+      if (st) items = items.filter(h => h.status.toLowerCase() === st);
+      return { reply_type: 'history', history: items };
+    }
+    // intent: cancel_leave
+    if (/cancel/.test(t)) {
+      const m = t.match(/#?\s*ab[-\s]?(\d+)/i);
+      if (!m) return { reply_type: 'clarification',
+        question: 'Sure — which request should I cancel? Give me the ID (e.g. #AB-10391).' };
+      const id = '#AB-' + m[1];
+      const req = (mockDB.history[employee_id] || []).find(h => h.id === id);
+      if (!req) return { reply_type: 'policy_block', message: `I couldn't find request ${id} under your name.` };
+      if (req.status !== 'Pending') return { reply_type: 'policy_block',
+        message: `${id} is ${req.status} — only pending requests can be cancelled here.` };
+      req.status = 'Cancelled';
+      let restored = '';
+      if (bal[req.code] !== undefined && req.duration) {
+        bal[req.code] += req.duration;
+        restored = ` ${req.duration} day(s) returned to your ${BAL_META[req.code]?.label || req.code} balance.`;
+      }
+      return { reply_type: 'cancelled', message: `Done — ${id} has been cancelled.${restored}`, refresh: true };
+    }
+
+    // intent: apply_leave
+    const p = mockParse(message);
+    if (has_attachment) p.hasAttachment = true;
+    if (p.missing.length) {
+      let q = 'Could you give me a bit more detail?';
+      if (p.missing.includes('absence_code') && p.missing.includes('start_date'))
+        q = 'Which day(s) do you need off, and what type of leave (sick, casual, earned)?';
+      else if (p.missing.includes('absence_code')) q = 'What type of leave is this — sick, casual, or earned?';
+      else if (p.missing.includes('start_date'))   q = 'Which day(s) should the leave start?';
+      else if (p.missing.includes('duration_days')) q = 'How many days do you need?';
+      return { reply_type: 'clarification', question: q };
+    }
+
+    const end = p.duration > 1 ? addDays(p.start, Math.round(p.duration) - 1) : p.start;
+
+    // policy: document required
+    if (p.code in DOC_REQUIRED_OVER && p.duration > DOC_REQUIRED_OVER[p.code] && !p.hasAttachment) {
+      return { reply_type: 'policy_block',
+        message: `Sick leave over ${DOC_REQUIRED_OVER[p.code]} days needs a medical certificate. Please attach one to proceed.` };
+    }
+    // policy: insufficient balance (WFH/LOP not balance-tracked)
+    if (bal[p.code] !== undefined && p.duration > bal[p.code]) {
+      return { reply_type: 'policy_block',
+        message: `You only have ${bal[p.code]} day(s) of ${BAL_META[p.code]?.label || p.code} left, but this request is for ${p.duration}.` };
+    }
+
+    const session_id = 's' + Date.now();
+    const balanceAfter = bal[p.code] !== undefined ? bal[p.code] - p.duration : null;
+    const card = {
+      code: p.code,
+      label: CODE_LABEL[p.code] || p.code,
+      start: fmtDate(p.start),
+      end: fmtDate(end),
+      sameDay: +p.start === +end,
+      duration: p.duration,
+      comment: deriveComment(message),
+      attachment: p.hasAttachment ? 'document.pdf' : null,
+      balanceAfter,
+    };
+    mockDB.drafts[session_id] = { employee_id, code: p.code, duration: p.duration,
+                                   start: p.start, end, label: card.label };
+    return { reply_type: 'confirmation', session_id, card };
+  },
+
+  async confirm({ session_id }) {
+    await delay(500);
+    const d = mockDB.drafts[session_id];
+    if (!d) return { error: 'draft expired' };
+    if (mockDB.balances[d.employee_id][d.code] !== undefined)
+      mockDB.balances[d.employee_id][d.code] -= d.duration;
+    const id = newRequestId();
+    const range = (+d.start === +d.end)
+      ? fmtShort(d.start) : `${fmtShort(d.start)}–${fmtShort(d.end)}`;
+    mockDB.history[d.employee_id].unshift(
+      { id, code: d.code, label: `${BAL_META[d.code]?.label || d.label} · ${range}`, status: 'Pending', duration: d.duration });
+    delete mockDB.drafts[session_id];
+    return { request_id: id, status: 'Pending', balances: mockDB.balances[d.employee_id] };
+  },
+};
+
+function deriveComment(msg) {
+  // keep it short; the real model summarises this
+  return msg.length > 60 ? msg.slice(0, 57) + '…' : msg;
+}
+function fmtShort(d) { return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short' }); }
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/* ============================================================================
+ * REAL BACKEND — same interface, used when USE_MOCK = false (Phase 3).
+ * ==========================================================================*/
+const realApi = {
+  async employees() { return (await fetch('/api/employees')).json(); },
+  async balances(empId) { return (await fetch(`/api/balances?employee_id=${empId}`)).json(); },
+  async history(empId) { return (await fetch(`/api/history?employee_id=${empId}`)).json(); },
+  async chat(body) {
+    return (await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body) })).json();
+  },
+  async confirm(body) {
+    return (await fetch('/api/confirm', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body) })).json();
+  },
+};
+
+const api = USE_MOCK ? mockApi : realApi;
+
+/* ============================================================================
+ * UI STATE + RENDERING
+ * ==========================================================================*/
+const state = { employeeId: null, attached: false };
+
+const $ = (s) => document.querySelector(s);
+const messagesEl = $('#messages');
+
+function initials(name) { return name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase(); }
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function scrollDown() { messagesEl.scrollTop = messagesEl.scrollHeight; }
+
+function bubbleUser(text) {
+  const row = document.createElement('div');
+  row.className = 'flex justify-end';
+  row.innerHTML = `<div class="bubble-user">${esc(text)}</div>`;
+  messagesEl.appendChild(row); scrollDown();
+}
+function botRow(innerHTML, avatar = 'L', avatarBg = 'bg-brand-500') {
+  const row = document.createElement('div');
+  row.className = 'flex gap-2.5';
+  row.innerHTML = `<div class="w-7 h-7 rounded-full ${avatarBg} text-white grid place-items-center text-[11px] font-bold shrink-0">${avatar}</div>${innerHTML}`;
+  messagesEl.appendChild(row); scrollDown();
+  return row;
+}
+function bubbleBot(text) { botRow(`<div class="bubble-bot">${text}</div>`); }
+
+function typing() {
+  const row = botRow(`<div class="bubble-bot py-3"><span class="dot-typing"></span></div>`);
+  return row;
+}
+
+function renderBalanceCard(bal) {
+  const cells = Object.keys(BAL_META).map(code => `
+    <div class="bg-white px-4 py-3">
+      <p class="text-2xl font-bold">${bal[code] ?? 0}<span class="text-sm font-medium text-slate-400"> days</span></p>
+      <p class="text-xs text-slate-500 mt-0.5">${BAL_META[code].label}</p>
+    </div>`).join('');
+  botRow(`<div class="w-full max-w-md">
+    <div class="bubble-bot mb-2">Here's your current balance:</div>
+    <div class="rounded-xl border border-slate-200 overflow-hidden">
+      <div class="bg-brand-50 px-4 py-2.5 flex items-center justify-between">
+        <span class="text-sm font-semibold text-brand-700">Leave balance</span>
+        <span class="text-[11px] text-brand-600">as of ${fmtDate(TODAY)}</span>
+      </div>
+      <div class="grid grid-cols-2 gap-px bg-slate-100">${cells}</div>
+      <div class="px-4 py-2.5 bg-slate-50 text-[11px] text-slate-500">Want to apply for one of these? Just tell me the dates.</div>
+    </div></div>`);
+}
+
+function renderHistoryCard(items) {
+  if (!items.length) { bubbleBot('You have no leave requests yet.'); return; }
+  const rows = items.map(h => `
+    <div class="flex items-center justify-between px-4 py-2.5">
+      <div><p class="text-sm font-medium">${esc(h.label)}</p><p class="text-[11px] text-slate-400">${esc(h.id)}</p></div>
+      <span class="badge ${STATUS_BADGE[h.status]||'bg-slate-100 text-slate-500'}">${h.status}</span>
+    </div>`).join('<div class="h-px bg-slate-100"></div>');
+  botRow(`<div class="w-full max-w-md">
+    <div class="bubble-bot mb-2">Here are your recent requests:</div>
+    <div class="rounded-xl border border-slate-200 overflow-hidden bg-white">${rows}</div></div>`);
+}
+
+function renderConfirmation(card, sessionId) {
+  const dates = card.sameDay
+    ? `${card.start} (${card.duration} day)`
+    : `${card.start} → ${card.end} (${card.duration} days)`;
+  const balLine = card.balanceAfter !== null
+    ? `<div class="flex justify-between py-1.5"><dt class="text-slate-500">${BAL_META[card.code]?.label||card.code} balance after</dt><dd class="font-medium">${card.balanceAfter} days</dd></div>` : '';
+  const attLine = `<div class="flex justify-between py-1.5"><dt class="text-slate-500">Attachment</dt><dd class="font-medium">${card.attachment ? esc(card.attachment)+' ✓' : 'none'}</dd></div>`;
+  botRow(`<div class="w-full max-w-md" data-card data-session="${sessionId}">
+    <div class="bubble-bot mb-2">Here's what I'll submit — please confirm:</div>
+    <div class="rounded-xl border border-slate-200 overflow-hidden">
+      <div class="bg-brand-50 px-4 py-2.5 flex items-center justify-between">
+        <span class="text-sm font-semibold text-brand-700">${esc(card.label)}</span>
+        <span class="text-[11px] px-2 py-0.5 rounded-full bg-white text-brand-600 border border-brand-100">Draft</span>
+      </div>
+      <dl class="px-4 py-3 text-sm divide-y divide-slate-100">
+        <div class="flex justify-between py-1.5"><dt class="text-slate-500">Dates</dt><dd class="font-medium text-right">${dates}</dd></div>
+        <div class="flex justify-between py-1.5"><dt class="text-slate-500">Comment</dt><dd class="font-medium text-right max-w-[60%]">${esc(card.comment)}</dd></div>
+        ${attLine}${balLine}
+      </dl>
+      <div class="px-4 py-3 bg-slate-50 flex gap-2">
+        <button class="btn-primary" data-act="confirm">✓ Confirm</button>
+        <button class="btn-ghost" data-act="edit">✏️ Edit</button>
+        <button class="btn-ghost" data-act="cancel">✕ Cancel</button>
+      </div>
+    </div></div>`);
+}
+
+function renderReply(res) {
+  switch (res.reply_type) {
+    case 'balance':       renderBalanceCard(res.balances); break;
+    case 'history':       renderHistoryCard(res.history); break;
+    case 'clarification': botRow(`<div class="bubble-bot">${esc(res.question)}<span class="block mt-1 text-[11px] text-amber-600">⌖ I need a little more info</span></div>`); break;
+    case 'policy_block':  botRow(`<div class="bubble-bot border border-rose-200 bg-rose-50 text-rose-700">${esc(res.message)}</div>`, '!', 'bg-rose-500'); break;
+    case 'cancelled':     botRow(`<div class="bubble-bot border border-emerald-200 bg-emerald-50 text-emerald-700">${esc(res.message)}</div>`, '✓', 'bg-emerald-500'); break;
+    case 'confirmation':  renderConfirmation(res.card, res.session_id); break;
+    default:              botRow(`<div class="bubble-bot border border-rose-200 bg-rose-50 text-rose-600">Something went wrong. Please try again.</div>`, '⚠', 'bg-rose-500');
+  }
+}
+
+// ---- side panel ------------------------------------------------------------
+function renderBalances(bal) {
+  $('#balances').innerHTML = Object.keys(BAL_META).map(code => {
+    const m = BAL_META[code]; const days = bal[code] ?? 0;
+    const w = Math.min(100, Math.round(days / m.cap * 100));
+    return `<div class="balance-row"><span>${m.label}</span>
+      <div class="bar"><span style="width:${w}%" class="${m.color}"></span></div><b>${days}</b></div>`;
+  }).join('');
+}
+function renderHistoryPanel(items) {
+  const el = $('#history');
+  if (!items.length) { el.innerHTML = `<li class="px-5 py-4 text-sm text-slate-400">No requests yet.</li>`; return; }
+  el.innerHTML = items.map(h => `
+    <li class="px-5 py-3 flex items-center justify-between">
+      <div><p class="text-sm font-medium">${esc(h.label)}</p><p class="text-[11px] text-slate-400">${esc(h.id)}</p></div>
+      <span class="badge ${STATUS_BADGE[h.status]||'bg-slate-100 text-slate-500'}">${h.status}</span>
+    </li>`).join('');
+}
+async function refreshPanels() {
+  const [bal, hist] = await Promise.all([api.balances(state.employeeId), api.history(state.employeeId)]);
+  renderBalances(bal); renderHistoryPanel(hist);
+}
+
+/* ============================================================================
+ * ACTIONS
+ * ==========================================================================*/
+async function send(text) {
+  const msg = text.trim();
+  if (!msg) return;
+  bubbleUser(state.attached ? `${msg}  📎 document.pdf` : msg);
+  $('#input').value = '';
+  setAttached(false);
+  const attached = state.attached;
+  const t = typing();
+  try {
+    const res = await api.chat({ employee_id: state.employeeId, message: msg, session_id: null, has_attachment: attached });
+    t.remove();
+    renderReply(res);
+    if (res.refresh) await refreshPanels();
+  } catch (e) {
+    t.remove();
+    botRow(`<div class="bubble-bot border border-rose-200 bg-rose-50 text-rose-600">Couldn't reach the assistant. Please retry.</div>`, '⚠', 'bg-rose-500');
+  }
+}
+
+async function confirmDraft(cardEl) {
+  const sessionId = cardEl.dataset.session;
+  cardEl.querySelectorAll('button').forEach(b => b.disabled = true);
+  const res = await api.confirm({ session_id: sessionId });
+  if (res.error) {
+    botRow(`<div class="bubble-bot border border-rose-200 bg-rose-50 text-rose-600">That draft expired — please tell me the leave again.</div>`, '⚠', 'bg-rose-500');
+    return;
+  }
+  botRow(`<div class="bubble-bot border border-emerald-200 bg-emerald-50">
+    <span class="font-medium text-emerald-700">Submitted.</span> Request
+    <span class="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-emerald-200">${esc(res.request_id)}</span>
+    sent to your manager for approval.</div>`, '✓', 'bg-emerald-500');
+  await refreshPanels();
+}
+
+function setAttached(on) {
+  state.attached = on;
+  $('#attach').classList.toggle('!bg-brand-50', on);
+  $('#attach').classList.toggle('!border-brand-300', on);
+  $('#attachnote').textContent = on
+    ? '📎 document.pdf attached — nothing is submitted until you confirm.'
+    : 'ⓘ Nothing is submitted until you confirm.';
+}
+
+/* ============================================================================
+ * BOOT
+ * ==========================================================================*/
+async function selectEmployee(empId, name) {
+  state.employeeId = empId;
+  $('#avatar').textContent = initials(name);
+  messagesEl.innerHTML = '';
+  bubbleBot(`Hi ${esc(name.split(' ')[0])} 👋 Tell me about the leave you'd like to take — or ask "what's my leave balance?"`);
+  await refreshPanels();
+}
+
+async function boot() {
+  $('#mockflag').style.display = USE_MOCK ? '' : 'none';
+  const emps = await api.employees();
+  const sel = $('#employee');
+  sel.innerHTML = emps.map(e => `<option value="${e.id}">${esc(e.name)} — ${esc(e.dept)}</option>`).join('');
+  sel.addEventListener('change', () => {
+    const e = emps.find(x => x.id === sel.value);
+    selectEmployee(e.id, e.name);
+  });
+
+  // composer
+  $('#send').addEventListener('click', () => send($('#input').value));
+  $('#input').addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); send($('#input').value); }
+  });
+  $('#attach').addEventListener('click', () => setAttached(!state.attached));
+  $('#chips').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-fill]'); if (b) send(b.dataset.fill);
+  });
+
+  // confirmation card buttons (event delegation)
+  messagesEl.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('[data-act]'); if (!btn) return;
+    const card = btn.closest('[data-card]');
+    const act = btn.dataset.act;
+    if (act === 'confirm') confirmDraft(card);
+    else if (act === 'cancel') { card.remove(); bubbleBot('No problem — cancelled. Nothing was submitted.'); }
+    else if (act === 'edit') { $('#input').focus(); bubbleBot('Sure — tell me what to change (dates, type, or duration).'); }
+  });
+
+  await selectEmployee(emps[0].id, emps[0].name);
+}
+
+boot();

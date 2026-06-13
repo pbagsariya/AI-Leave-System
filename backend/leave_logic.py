@@ -140,14 +140,15 @@ def _extract_dates(text: str, today: dt.date):
         except ValueError:
             pass
 
+    sep = r"[\s\-/.,]*"      # allow space, hyphen, slash, dot, comma between parts
     # ISO yyyy-mm-dd
     for m in re.finditer(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b", t):
         add(m.start(), int(m.group(1)), int(m.group(2)), int(m.group(3)))
-    # dd Month yyyy  (11th august 2026 / 11-august-2026 / 11 aug 2026)
-    for m in re.finditer(r"\b(\d{1,2})(?:st|nd|rd|th)?[\s\-]*(" + _MONTH_ALT + r")[\s\-]*(\d{4})\b", t):
+    # dd Month yyyy  (11th august 2026 / 11-aug-2026 / 11/august/2026 / 11 aug 2026)
+    for m in re.finditer(r"\b(\d{1,2})(?:st|nd|rd|th)?" + sep + r"(" + _MONTH_ALT + r")" + sep + r"(\d{4})\b", t):
         add(m.start(), int(m.group(3)), _MONTHS[m.group(2)], int(m.group(1)))
-    # Month dd yyyy  (august 11 2026 / august 11th, 2026)
-    for m in re.finditer(r"\b(" + _MONTH_ALT + r")[\s\-]+(\d{1,2})(?:st|nd|rd|th)?,?[\s\-]*(\d{4})\b", t):
+    # Month dd yyyy  (august 11 2026 / august/11/2026 / august 11th, 2026)
+    for m in re.finditer(r"\b(" + _MONTH_ALT + r")" + sep + r"(\d{1,2})(?:st|nd|rd|th)?" + sep + r"(\d{4})\b", t):
         add(m.start(), int(m.group(3)), _MONTHS[m.group(1)], int(m.group(2)))
     # dd/mm/yyyy or dd-mm-yyyy (day-first, common outside the US)
     for m in re.finditer(r"\b(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})\b", t):

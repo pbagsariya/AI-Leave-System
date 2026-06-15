@@ -11,6 +11,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import secrets
 import sqlite3
 from typing import Optional
 
@@ -31,7 +32,8 @@ def init_db() -> None:
         c.executescript(
             """
             CREATE TABLE IF NOT EXISTS employees (
-                id TEXT PRIMARY KEY, name TEXT, dept TEXT, timezone TEXT
+                id TEXT PRIMARY KEY, name TEXT, dept TEXT, timezone TEXT,
+                role TEXT DEFAULT 'Employee'
             );
             CREATE TABLE IF NOT EXISTS balances (
                 employee_id TEXT, code TEXT, days REAL,
@@ -57,11 +59,19 @@ def init_db() -> None:
             );
             """
         )
+        # migrate an older leave.db that predates the role column
+        cols = [r["name"] for r in c.execute("PRAGMA table_info(employees)")]
+        if "role" not in cols:
+            c.execute("ALTER TABLE employees ADD COLUMN role TEXT DEFAULT 'Employee'")
+
         # idempotent: ensure every demo employee, balance, and login exists.
         # INSERT OR IGNORE adds new users to an existing leave.db without
         # touching current data (e.g. drawn-down balances stay as they are).
-        for eid, name, dept in EMPLOYEES:
-            c.execute("INSERT OR IGNORE INTO employees VALUES (?,?,?,?)", (eid, name, dept, "Asia/Kolkata"))
+        for eid, name, dept, role in EMPLOYEES:
+            c.execute("INSERT OR IGNORE INTO employees (id, name, dept, timezone, role) VALUES (?,?,?,?,?)",
+                      (eid, name, dept, "Asia/Kolkata", role))
+            # keep the seeded role authoritative even on an older leave.db
+            c.execute("UPDATE employees SET role = ? WHERE id = ?", (role, eid))
             for code, days in BALANCES[eid].items():
                 c.execute("INSERT OR IGNORE INTO balances VALUES (?,?,?)", (eid, code, days))
         for username, pw, eid in CREDS:
@@ -75,14 +85,18 @@ def _hash(password: str) -> str:
     return hashlib.sha256(("leave-demo::" + password).encode()).hexdigest()
 
 
-# Demo roster. Usernames are stored lowercase; verify_login() lowercases input.
+# Demo roster (id, name, dept, role). Usernames are stored lowercase;
+# verify_login() lowercases input.
 EMPLOYEES = [
-    ("e1", "Asha Menon", "Engineering"),
-    ("e2", "Ravi Kapoor", "Sales"),
-    ("e3", "Meera Iyer", "Design"),
-    ("e4", "Prakash Bagsariya", "Developer"),
-    ("e5", "Krupal Tasare", "Engineer"),
+    ("e1", "Asha Menon", "Engineering", "Manager"),
+    ("e2", "Ravi Kapoor", "Sales", "Employee"),
+    ("e3", "Meera Iyer", "Design", "Employee"),
+    ("e4", "Prakash Bagsariya", "Developer", "Employee"),
+    ("e5", "Krupal Tasare", "Engineer", "Employee"),
 ]
+
+# Starting allotment granted to a freshly signed-up account.
+DEFAULT_NEW_BALANCES = {"SICK": 10, "CASUAL": 8, "EARNED": 15, "COMP_OFF": 4}
 BALANCES = {
     "e1": {"SICK": 8, "CASUAL": 5, "EARNED": 12, "COMP_OFF": 2},
     "e2": {"SICK": 6, "CASUAL": 7, "EARNED": 9, "COMP_OFF": 1},
@@ -122,17 +136,39 @@ def _seed_history(c: sqlite3.Connection) -> None:
 
 def get_employees() -> list[dict]:
     with _conn() as c:
-        rows = c.execute("SELECT id, name, dept FROM employees ORDER BY name").fetchall()
+        rows = c.execute("SELECT id, name, dept, role FROM employees ORDER BY name").fetchall()
     return [dict(r) for r in rows]
 
 
 def get_employee(employee_id: str) -> Optional[dict]:
     with _conn() as c:
-        row = c.execute("SELECT id, name, dept FROM employees WHERE id = ?", (employee_id,)).fetchone()
+        row = c.execute("SELECT id, name, dept, role FROM employees WHERE id = ?", (employee_id,)).fetchone()
     return dict(row) if row else None
 
 
 # ---- auth -------------------------------------------------------------------
+
+def username_exists(username: str) -> bool:
+    with _conn() as c:
+        return c.execute(
+            "SELECT 1 FROM credentials WHERE username = ?", (username.strip().lower(),)
+        ).fetchone() is not None
+
+
+def create_account(username: str, password: str, name: str, dept: str, role: str) -> str:
+    """Create an employee + balances + login. Returns the new employee_id."""
+    username = username.strip().lower()
+    eid = "u" + secrets.token_hex(4)
+    with _conn() as c:
+        c.execute(
+            "INSERT INTO employees (id, name, dept, timezone, role) VALUES (?,?,?,?,?)",
+            (eid, name.strip(), dept.strip() or "—", "Asia/Kolkata", role),
+        )
+        for code, days in DEFAULT_NEW_BALANCES.items():
+            c.execute("INSERT INTO balances VALUES (?,?,?)", (eid, code, days))
+        c.execute("INSERT INTO credentials VALUES (?,?,?)", (username, _hash(password), eid))
+    return eid
+
 
 def verify_login(username: str, password: str) -> Optional[str]:
     """Return the employee_id for valid credentials, else None."""

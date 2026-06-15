@@ -50,11 +50,56 @@
         <button type="submit" id="loginBtn" class="btn-primary w-full h-10 mt-1">Sign in</button>
       </form>
 
-      <div class="mt-5 pt-4 border-t border-slate-100 text-[11px] text-slate-400 leading-relaxed">
+      <button id="toSignup" type="button" class="w-full text-center text-xs text-brand-600 hover:underline mt-4">Create a new account</button>
+
+      <div class="mt-4 pt-4 border-t border-slate-100 text-[11px] text-slate-400 leading-relaxed">
         <span class="font-medium text-slate-500">Demo logins</span><br />
         asha / asha123 · ravi / ravi123 · meera / meera123<br />
         prakash / prakash123 · krupal / krupal123
       </div>
+    </div>
+  </div>
+
+  <!-- ───────────── Signup screen ───────────── -->
+  <div id="signup" class="hidden min-h-screen grid place-items-center px-4">
+    <div class="w-full max-w-sm bg-white rounded-2xl border border-slate-200 shadow-sm p-7">
+      <div class="flex items-center gap-2.5 mb-6">
+        <div class="w-10 h-10 rounded-lg bg-brand-500 text-white grid place-items-center font-bold text-lg">L</div>
+        <div>
+          <h1 class="text-base font-semibold leading-tight">Create account</h1>
+          <p class="text-[11px] text-slate-400 leading-tight">Join as an employee or manager</p>
+        </div>
+      </div>
+
+      <form id="signupForm" class="space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Full name</label>
+          <input id="suName" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Department</label>
+          <input id="suDept" type="text" placeholder="e.g. Engineering" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Role</label>
+          <div class="grid grid-cols-2 gap-2" id="suRole">
+            <label class="role-opt"><input type="radio" name="role" value="Employee" checked class="sr-only" /><span>Employee</span></label>
+            <label class="role-opt"><input type="radio" name="role" value="Manager" class="sr-only" /><span>Manager</span></label>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Username</label>
+          <input id="suUsername" type="text" autocomplete="username" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Password</label>
+          <input id="suPassword" type="password" autocomplete="new-password" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+        </div>
+        <p id="signupError" class="text-xs text-rose-600 hidden"></p>
+        <button type="submit" id="signupBtn" class="btn-primary w-full h-10 mt-1">Create account</button>
+      </form>
+
+      <button id="toLogin" type="button" class="w-full text-center text-xs text-brand-600 hover:underline mt-4">Already have an account? Sign in</button>
     </div>
   </div>
 

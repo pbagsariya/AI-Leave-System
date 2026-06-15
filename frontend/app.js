@@ -30,11 +30,11 @@ const STATUS_BADGE = {
  * ==========================================================================*/
 const mockDB = {
   employees: [
-    { id: 'e1', name: 'Asha Menon',       dept: 'Engineering' },
-    { id: 'e2', name: 'Ravi Kapoor',      dept: 'Sales' },
-    { id: 'e3', name: 'Meera Iyer',       dept: 'Design' },
-    { id: 'e4', name: 'Prakash Bagsariya',dept: 'Developer' },
-    { id: 'e5', name: 'Krupal Tasare',    dept: 'Engineer' },
+    { id: 'e1', name: 'Asha Menon',       dept: 'Engineering', role: 'Manager' },
+    { id: 'e2', name: 'Ravi Kapoor',      dept: 'Sales',       role: 'Employee' },
+    { id: 'e3', name: 'Meera Iyer',       dept: 'Design',      role: 'Employee' },
+    { id: 'e4', name: 'Prakash Bagsariya',dept: 'Developer',   role: 'Employee' },
+    { id: 'e5', name: 'Krupal Tasare',    dept: 'Engineer',    role: 'Employee' },
   ],
   balances: {
     e1: { SICK: 8, CASUAL: 5, EARNED: 12, COMP_OFF: 2 },
@@ -117,6 +117,21 @@ const mockApi = {
     return { error: 'Invalid username or password' };
   },
   async logout() { mockDB.current = null; },
+  async signup({ name, dept, username, password, role }) {
+    const u = (username || '').trim().toLowerCase();
+    if (!name || !u || !password) return { error: 'Name, username and password are required' };
+    if (password.length < 4) return { error: 'Password must be at least 4 characters' };
+    if (u.includes(' ')) return { error: 'Username cannot contain spaces' };
+    if (mockDB.creds[u]) return { error: 'That username is already taken' };
+    const id = 'u' + Math.random().toString(16).slice(2, 10);
+    const emp = { id, name: name.trim(), dept: (dept || '—').trim(), role: role === 'Manager' ? 'Manager' : 'Employee' };
+    mockDB.employees.push(emp);
+    mockDB.balances[id] = { SICK: 10, CASUAL: 8, EARNED: 15, COMP_OFF: 4 };
+    mockDB.history[id] = [];
+    mockDB.creds[u] = { pw: password, id };
+    mockDB.current = id;
+    return emp;
+  },
 
   async balances() { return mockDB.balances[mockDB.current]; },
   async history() { return mockDB.history[mockDB.current] || []; },
@@ -241,6 +256,12 @@ const realApi = {
     return { error: d.detail || 'Invalid username or password' };
   },
   async logout() { await postJSON('/api/logout'); },
+  async signup(body) {
+    const r = await postJSON('/api/signup', body);
+    if (r.ok) return r.json();
+    const d = await r.json().catch(() => ({}));
+    return { error: d.detail || 'Could not create account' };
+  },
 
   async balances() { return (await fetch('/api/balances')).json(); },
   async history() { return (await fetch('/api/history')).json(); },
@@ -424,9 +445,15 @@ function setAttached(on) {
  * BOOT
  * ==========================================================================*/
 // ---- views -----------------------------------------------------------------
+function hideAuthViews() {
+  $('#login').classList.add('hidden');
+  $('#signup').classList.add('hidden');
+}
+
 function showLogin() {
   state.user = null;
   $('#app').classList.add('hidden');
+  hideAuthViews();
   $('#login').classList.remove('hidden');
   $('#username').value = '';
   $('#password').value = '';
@@ -434,12 +461,20 @@ function showLogin() {
   $('#username').focus();
 }
 
+function showSignup() {
+  $('#app').classList.add('hidden');
+  hideAuthViews();
+  $('#signup').classList.remove('hidden');
+  $('#signupError').classList.add('hidden');
+  $('#suName').focus();
+}
+
 async function showApp(user) {
   state.user = user;
-  $('#login').classList.add('hidden');
+  hideAuthViews();
   $('#app').classList.remove('hidden');
   $('#userName').textContent = user.name;
-  $('#userDept').textContent = user.dept || '';
+  $('#userDept').textContent = [user.dept, user.role].filter(Boolean).join(' · ');
   $('#avatar').textContent = initials(user.name);
   messagesEl.innerHTML = '';
   bubbleBot(`Hi ${esc(user.name.split(' ')[0])} 👋 Tell me about the leave you'd like to take — or ask "what's my leave balance?"`);
@@ -463,6 +498,28 @@ async function doLogin(ev) {
   }
 }
 
+async function doSignup(ev) {
+  ev.preventDefault();
+  const btn = $('#signupBtn');
+  const err = $('#signupError');
+  err.classList.add('hidden');
+  const role = (document.querySelector('#suRole input:checked') || {}).value || 'Employee';
+  const body = {
+    name: $('#suName').value, dept: $('#suDept').value,
+    username: $('#suUsername').value, password: $('#suPassword').value, role,
+  };
+  btn.disabled = true; btn.textContent = 'Creating…';
+  try {
+    const res = await api.signup(body);
+    if (res && !res.error) { await showApp(res); }
+    else { err.textContent = res.error || 'Could not create account'; err.classList.remove('hidden'); }
+  } catch (e) {
+    err.textContent = 'Could not create account. Please try again.'; err.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Create account';
+  }
+}
+
 async function doLogout() {
   await api.logout();
   setAttached(false);
@@ -473,8 +530,11 @@ async function doLogout() {
 async function boot() {
   $('#mockflag').style.display = USE_MOCK ? '' : 'none';
 
-  // login screen
+  // auth screens
   $('#loginForm').addEventListener('submit', doLogin);
+  $('#signupForm').addEventListener('submit', doSignup);
+  $('#toSignup').addEventListener('click', showSignup);
+  $('#toLogin').addEventListener('click', showLogin);
   $('#logout').addEventListener('click', doLogout);
 
   // composer

@@ -43,6 +43,12 @@ identity from it, so you only see and act on your own leave. **Logout** clears
 it. Passwords are SHA-256 hashed in the `credentials` table — demo-grade auth,
 not production-hardened; change the seeded logins there for anything real.
 
+**Sign up** — the login screen has a *Create a new account* link. You can
+register as an **Employee** or **Manager**; the account is created with a
+starting balance and you're signed straight in. The chosen role is shown in the
+header. (Manager-specific features like approvals aren't wired yet — the role is
+stored and displayed.)
+
 **AI is automatic — nothing to configure.** On startup the app tries Claude; if
 it's reachable it uses the model, otherwise it switches to a built-in
 deterministic parser for the session (and stops retrying). So:

@@ -60,6 +60,14 @@ class LoginIn(BaseModel):
     password: str
 
 
+class SignupIn(BaseModel):
+    name: str
+    dept: str = ""
+    username: str
+    password: str
+    role: str = "Employee"
+
+
 class ChatIn(BaseModel):
     message: str
     session_id: str | None = None
@@ -80,15 +88,36 @@ def current_emp(session: str | None = Cookie(default=None)) -> str:
     return emp
 
 
+def _start_session(emp: str, response: Response) -> dict:
+    token = secrets.token_urlsafe(32)
+    db.create_session(token, emp)
+    response.set_cookie("session", token, httponly=True, samesite="lax", max_age=86400)
+    return db.get_employee(emp)
+
+
+@app.post("/api/signup")
+def signup(body: SignupIn, response: Response):
+    name = body.name.strip()
+    username = body.username.strip()
+    if not name or not username or not body.password:
+        raise HTTPException(status_code=400, detail="Name, username and password are required")
+    if len(body.password) < 4:
+        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+    if " " in username:
+        raise HTTPException(status_code=400, detail="Username cannot contain spaces")
+    if db.username_exists(username):
+        raise HTTPException(status_code=409, detail="That username is already taken")
+    role = "Manager" if body.role == "Manager" else "Employee"
+    emp = db.create_account(username, body.password, name, body.dept, role)
+    return _start_session(emp, response)  # auto-login after signup
+
+
 @app.post("/api/login")
 def login(body: LoginIn, response: Response):
     emp = db.verify_login(body.username, body.password)
     if not emp:
         raise HTTPException(status_code=401, detail="Invalid username or password")
-    token = secrets.token_urlsafe(32)
-    db.create_session(token, emp)
-    response.set_cookie("session", token, httponly=True, samesite="lax", max_age=86400)
-    return db.get_employee(emp)
+    return _start_session(emp, response)
 
 
 @app.post("/api/logout")

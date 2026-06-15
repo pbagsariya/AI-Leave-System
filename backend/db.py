@@ -8,6 +8,7 @@ One file (leave.db) replaces Redis (session drafts) + PostgreSQL (audit/history)
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import os
 import sqlite3
@@ -48,11 +49,35 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id TEXT, message TEXT,
                 parsed_json TEXT, validation_json TEXT, created_at TEXT
             );
+            CREATE TABLE IF NOT EXISTS credentials (
+                username TEXT PRIMARY KEY, password_hash TEXT, employee_id TEXT
+            );
+            CREATE TABLE IF NOT EXISTS auth_sessions (
+                token TEXT PRIMARY KEY, employee_id TEXT, created_at TEXT
+            );
             """
         )
         # seed once
         if c.execute("SELECT COUNT(*) FROM employees").fetchone()[0] == 0:
             _seed(c)
+        # seed login credentials independently (so an existing leave.db gets them)
+        if c.execute("SELECT COUNT(*) FROM credentials").fetchone()[0] == 0:
+            _seed_credentials(c)
+
+
+def _hash(password: str) -> str:
+    return hashlib.sha256(("leave-demo::" + password).encode()).hexdigest()
+
+
+def _seed_credentials(c: sqlite3.Connection) -> None:
+    # demo logins (username, password, employee_id) — change for anything real
+    creds = [
+        ("asha", "asha123", "e1"),
+        ("ravi", "ravi123", "e2"),
+        ("meera", "meera123", "e3"),
+    ]
+    for username, pw, eid in creds:
+        c.execute("INSERT INTO credentials VALUES (?,?,?)", (username, _hash(pw), eid))
 
 
 def _seed(c: sqlite3.Connection) -> None:
@@ -95,6 +120,47 @@ def get_employees() -> list[dict]:
     with _conn() as c:
         rows = c.execute("SELECT id, name, dept FROM employees ORDER BY name").fetchall()
     return [dict(r) for r in rows]
+
+
+def get_employee(employee_id: str) -> Optional[dict]:
+    with _conn() as c:
+        row = c.execute("SELECT id, name, dept FROM employees WHERE id = ?", (employee_id,)).fetchone()
+    return dict(row) if row else None
+
+
+# ---- auth -------------------------------------------------------------------
+
+def verify_login(username: str, password: str) -> Optional[str]:
+    """Return the employee_id for valid credentials, else None."""
+    with _conn() as c:
+        row = c.execute(
+            "SELECT employee_id, password_hash FROM credentials WHERE username = ?",
+            (username.strip().lower(),),
+        ).fetchone()
+    if row and row["password_hash"] == _hash(password):
+        return row["employee_id"]
+    return None
+
+
+def create_session(token: str, employee_id: str) -> None:
+    with _conn() as c:
+        c.execute(
+            "INSERT OR REPLACE INTO auth_sessions VALUES (?,?,?)",
+            (token, employee_id, dt.datetime.now().isoformat()),
+        )
+
+
+def session_employee(token: str) -> Optional[str]:
+    with _conn() as c:
+        row = c.execute(
+            "SELECT employee_id FROM auth_sessions WHERE token = ?", (token,)
+        ).fetchone()
+    return row["employee_id"] if row else None
+
+
+def delete_session(token: str) -> None:
+    with _conn() as c:
+        c.execute("DELETE FROM auth_sessions WHERE token = ?", (token,))
 
 
 def get_balances(employee_id: str) -> dict:

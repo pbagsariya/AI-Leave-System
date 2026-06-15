@@ -19,10 +19,11 @@ import datetime as dt
 import os
 import random
 import re
+import secrets
 import time
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -54,8 +55,12 @@ def _startup() -> None:
 
 # ---- request models --------------------------------------------------------
 
+class LoginIn(BaseModel):
+    username: str
+    password: str
+
+
 class ChatIn(BaseModel):
-    employee_id: str
     message: str
     session_id: str | None = None
     has_attachment: bool = False
@@ -63,6 +68,40 @@ class ChatIn(BaseModel):
 
 class ConfirmIn(BaseModel):
     session_id: str
+
+
+# ---- auth ------------------------------------------------------------------
+
+def current_emp(session: str | None = Cookie(default=None)) -> str:
+    """Resolve the logged-in employee from the session cookie, or 401."""
+    emp = db.session_employee(session) if session else None
+    if not emp:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return emp
+
+
+@app.post("/api/login")
+def login(body: LoginIn, response: Response):
+    emp = db.verify_login(body.username, body.password)
+    if not emp:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    token = secrets.token_urlsafe(32)
+    db.create_session(token, emp)
+    response.set_cookie("session", token, httponly=True, samesite="lax", max_age=86400)
+    return db.get_employee(emp)
+
+
+@app.post("/api/logout")
+def logout(response: Response, session: str | None = Cookie(default=None)):
+    if session:
+        db.delete_session(session)
+    response.delete_cookie("session")
+    return {"ok": True}
+
+
+@app.get("/api/me")
+def me(emp: str = Depends(current_emp)):
+    return db.get_employee(emp)
 
 
 # ---- helpers ---------------------------------------------------------------
@@ -109,26 +148,20 @@ def _cancel(emp: str, text: str, bal: dict) -> dict:
 
 # ---- API: reads ------------------------------------------------------------
 
-@app.get("/api/employees")
-def employees():
-    return db.get_employees()
-
-
 @app.get("/api/balances")
-def balances(employee_id: str):
-    return db.get_balances(employee_id)
+def balances(emp: str = Depends(current_emp)):
+    return db.get_balances(emp)
 
 
 @app.get("/api/history")
-def history(employee_id: str):
-    return db.get_history(employee_id)
+def history(emp: str = Depends(current_emp)):
+    return db.get_history(emp)
 
 
 # ---- API: chat (extract -> validate -> reply) ------------------------------
 
 @app.post("/api/chat")
-def chat(body: ChatIn):
-    emp = body.employee_id
+def chat(body: ChatIn, emp: str = Depends(current_emp)):
     bal = db.get_balances(emp)
     text = body.message.lower()
 
@@ -213,12 +246,11 @@ def chat(body: ChatIn):
 # ---- API: confirm (the only place a request is submitted) ------------------
 
 @app.post("/api/confirm")
-def confirm(body: ConfirmIn):
+def confirm(body: ConfirmIn, emp: str = Depends(current_emp)):
     draft = db.get_draft(body.session_id)
-    if not draft:
+    if not draft or draft["employee_id"] != emp:
         return {"error": "draft expired"}
 
-    emp = draft["employee_id"]
     PENDING.pop(emp, None)
     code = draft["code"]
     duration = draft["duration"] or 0

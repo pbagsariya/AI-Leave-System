@@ -17,7 +17,7 @@ This is the simplified, single-laptop demo of the system in
 | Orchestrator | Python **FastAPI** (also serves the frontend, same origin)       |
 | AI           | **Claude** via your subscription (OAuth, **no API key**)         |
 | Store        | **SQLite** (`leave.db`) — replaces Redis + Postgres + mock HRMS  |
-| Identity     | **None** (a "logged in as" employee dropdown replaces SSO)       |
+| Auth         | **Demo username/password** + server session cookie (no SSO)     |
 
 ## Run
 
@@ -26,6 +26,20 @@ pip install -r backend/requirements.txt
 uvicorn backend.main:app --reload     # run from the repo root
 # open http://localhost:8000
 ```
+
+### Logging in
+Opening the app shows a **login screen**. Demo accounts (seeded into `leave.db`):
+
+| Username | Password   | Employee            |
+|----------|------------|---------------------|
+| `asha`   | `asha123`  | Asha Menon (Eng)    |
+| `ravi`   | `ravi123`  | Ravi Kapoor (Sales) |
+| `meera`  | `meera123` | Meera Iyer (Design) |
+
+Sign-in creates a server session (HTTP-only cookie); the backend derives your
+identity from it, so you only see and act on your own leave. **Logout** clears
+it. Passwords are SHA-256 hashed in the `credentials` table — demo-grade auth,
+not production-hardened; change the seeded logins there for anything real.
 
 **AI is automatic — nothing to configure.** On startup the app tries Claude; if
 it's reachable it uses the model, otherwise it switches to a built-in

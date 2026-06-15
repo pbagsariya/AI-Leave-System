@@ -24,79 +24,110 @@
 </head>
 <body class="bg-slate-100 text-ink font-sans antialiased">
 
-  <!-- ───────────── Header ───────────── -->
-  <header class="bg-white border-b border-slate-200">
-    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-      <div class="flex items-center gap-2.5">
-        <div class="w-9 h-9 rounded-lg bg-brand-500 text-white grid place-items-center font-bold">L</div>
+  <!-- ───────────── Login screen ───────────── -->
+  <div id="login" class="hidden min-h-screen grid place-items-center px-4">
+    <div class="w-full max-w-sm bg-white rounded-2xl border border-slate-200 shadow-sm p-7">
+      <div class="flex items-center gap-2.5 mb-6">
+        <div class="w-10 h-10 rounded-lg bg-brand-500 text-white grid place-items-center font-bold text-lg">L</div>
         <div>
-          <h1 class="text-[15px] font-semibold leading-tight">Leave Assistant</h1>
-          <p class="text-[11px] text-slate-400 leading-tight">AI-powered leave application · demo</p>
+          <h1 class="text-base font-semibold leading-tight">Leave Assistant</h1>
+          <p class="text-[11px] text-slate-400 leading-tight">Sign in to continue</p>
         </div>
       </div>
 
-      <!-- Employee selector replaces SSO -->
-      <div class="flex items-center gap-2">
-        <span class="text-xs text-slate-400 hidden sm:inline">Logged in as</span>
-        <div class="relative">
-          <select id="employee" class="appearance-none bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-9 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/30"></select>
-          <svg class="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      <form id="loginForm" class="space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Username</label>
+          <input id="username" type="text" autocomplete="username" autofocus
+            class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
         </div>
-        <div id="avatar" class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 grid place-items-center text-sm font-semibold">AM</div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Password</label>
+          <input id="password" type="password" autocomplete="current-password"
+            class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+        </div>
+        <p id="loginError" class="text-xs text-rose-600 hidden"></p>
+        <button type="submit" id="loginBtn" class="btn-primary w-full h-10 mt-1">Sign in</button>
+      </form>
+
+      <div class="mt-5 pt-4 border-t border-slate-100 text-[11px] text-slate-400 leading-relaxed">
+        <span class="font-medium text-slate-500">Demo logins</span><br />
+        asha / asha123 · ravi / ravi123 · meera / meera123
       </div>
     </div>
-  </header>
+  </div>
 
-  <!-- ───────────── Body ───────────── -->
-  <main class="max-w-6xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
-
-    <!-- ===== Chat panel ===== -->
-    <section class="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[640px]">
-      <div class="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2">
-        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-        <h2 class="text-sm font-semibold">Chat</h2>
-        <span class="text-xs text-slate-400">· just tell me your leave in plain English</span>
-        <span id="mockflag" class="ml-auto text-[10px] uppercase tracking-wide text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">mock</span>
-      </div>
-
-      <!-- messages (rendered by app.js) -->
-      <div class="flex-1 overflow-y-auto px-5 py-5 space-y-4" id="messages"></div>
-
-      <!-- composer -->
-      <div class="px-4 py-3 border-t border-slate-100">
-        <div class="flex flex-wrap gap-2 mb-2.5" id="chips">
-          <button class="chip" data-fill="How many leaves do I have left?">📊 Check balance</button>
-          <button class="chip" data-fill="2 days sick leave from tomorrow, medical note attached">🏖️ Apply leave</button>
-          <button class="chip" data-fill="show my leave history">🕑 View history</button>
+  <!-- ───────────── App (shown after login) ───────────── -->
+  <div id="app" class="hidden">
+    <header class="bg-white border-b border-slate-200">
+      <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-lg bg-brand-500 text-white grid place-items-center font-bold">L</div>
+          <div>
+            <h1 class="text-[15px] font-semibold leading-tight">Leave Assistant</h1>
+            <p class="text-[11px] text-slate-400 leading-tight">AI-powered leave application · demo</p>
+          </div>
         </div>
-        <div class="flex items-end gap-2">
-          <button id="attach" class="w-9 h-9 rounded-lg border border-slate-200 text-slate-400 grid place-items-center hover:bg-slate-50 shrink-0" title="Attach (mock)">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
-          </button>
-          <textarea id="input" rows="1" placeholder="e.g. need 2 days sick leave from tomorrow, medical note attached" class="flex-1 resize-none border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 max-h-32"></textarea>
-          <button id="send" class="btn-primary h-10 px-4 shrink-0">Send</button>
+
+        <div class="flex items-center gap-3">
+          <div class="text-right hidden sm:block">
+            <p id="userName" class="text-sm font-medium leading-tight">—</p>
+            <p id="userDept" class="text-[11px] text-slate-400 leading-tight">—</p>
+          </div>
+          <div id="avatar" class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 grid place-items-center text-sm font-semibold">·</div>
+          <button id="logout" class="btn-ghost h-9">Logout</button>
         </div>
-        <p id="attachnote" class="text-[11px] text-slate-400 mt-2 pl-1">ⓘ Nothing is submitted until you confirm.</p>
       </div>
-    </section>
+    </header>
 
-    <!-- ===== Side panel ===== -->
-    <aside class="space-y-6">
-      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm">
-        <div class="px-5 py-3.5 border-b border-slate-100"><h2 class="text-sm font-semibold">Leave balances</h2></div>
-        <div class="p-4 space-y-3" id="balances"></div>
-      </div>
+    <main class="max-w-6xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
 
-      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm">
-        <div class="px-5 py-3.5 border-b border-slate-100"><h2 class="text-sm font-semibold">Recent requests</h2></div>
-        <ul class="divide-y divide-slate-100" id="history"></ul>
-      </div>
-    </aside>
-  </main>
+      <!-- ===== Chat panel ===== -->
+      <section class="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[640px]">
+        <div class="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <h2 class="text-sm font-semibold">Chat</h2>
+          <span class="text-xs text-slate-400">· just tell me your leave in plain English</span>
+          <span id="mockflag" class="ml-auto text-[10px] uppercase tracking-wide text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">mock</span>
+        </div>
 
-  <footer class="max-w-6xl mx-auto px-4 pb-8 text-center text-[11px] text-slate-400">
-    Phase 2 · interactive · mocked API (flip <code>USE_MOCK</code> in app.js to hit the real backend)
-  </footer>
+        <div class="flex-1 overflow-y-auto px-5 py-5 space-y-4" id="messages"></div>
+
+        <div class="px-4 py-3 border-t border-slate-100">
+          <div class="flex flex-wrap gap-2 mb-2.5" id="chips">
+            <button class="chip" data-fill="How many leaves do I have left?">📊 Check balance</button>
+            <button class="chip" data-fill="2 days sick leave from tomorrow, medical note attached">🏖️ Apply leave</button>
+            <button class="chip" data-fill="show my leave history">🕑 View history</button>
+          </div>
+          <div class="flex items-end gap-2">
+            <button id="attach" class="w-9 h-9 rounded-lg border border-slate-200 text-slate-400 grid place-items-center hover:bg-slate-50 shrink-0" title="Attach (mock)">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+            </button>
+            <textarea id="input" rows="1" placeholder="e.g. need 2 days sick leave from tomorrow, medical note attached" class="flex-1 resize-none border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 max-h-32"></textarea>
+            <button id="send" class="btn-primary h-10 px-4 shrink-0">Send</button>
+          </div>
+          <p id="attachnote" class="text-[11px] text-slate-400 mt-2 pl-1">ⓘ Nothing is submitted until you confirm.</p>
+        </div>
+      </section>
+
+      <!-- ===== Side panel ===== -->
+      <aside class="space-y-6">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm">
+          <div class="px-5 py-3.5 border-b border-slate-100"><h2 class="text-sm font-semibold">Leave balances</h2></div>
+          <div class="p-4 space-y-3" id="balances"></div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm">
+          <div class="px-5 py-3.5 border-b border-slate-100"><h2 class="text-sm font-semibold">Recent requests</h2></div>
+          <ul class="divide-y divide-slate-100" id="history"></ul>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="max-w-6xl mx-auto px-4 pb-8 text-center text-[11px] text-slate-400">
+      Demo · signed in with a server session
+    </footer>
+  </div>
 
   <script src="app.js"></script>
 </body>

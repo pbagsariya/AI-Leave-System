@@ -49,6 +49,8 @@ const mockDB = {
     e3: [],
   },
   drafts: {}, // session_id -> parsed draft
+  current: null, // logged-in employee id (mock)
+  creds: { asha: { pw: 'asha123', id: 'e1' }, ravi: { pw: 'ravi123', id: 'e2' }, meera: { pw: 'meera123', id: 'e3' } },
 };
 
 const DOC_REQUIRED_OVER = { SICK: 2 };
@@ -97,12 +99,23 @@ function mockParse(message) {
 }
 
 const mockApi = {
-  async employees() { return mockDB.employees; },
-  async balances(empId) { return mockDB.balances[empId]; },
-  async history(empId) { return mockDB.history[empId] || []; },
+  async me() {
+    const id = mockDB.current;
+    return id ? mockDB.employees.find(e => e.id === id) : null;
+  },
+  async login({ username, password }) {
+    const c = mockDB.creds[(username || '').trim().toLowerCase()];
+    if (c && c.pw === password) { mockDB.current = c.id; return mockDB.employees.find(e => e.id === c.id); }
+    return { error: 'Invalid username or password' };
+  },
+  async logout() { mockDB.current = null; },
 
-  async chat({ employee_id, message, has_attachment }) {
+  async balances() { return mockDB.balances[mockDB.current]; },
+  async history() { return mockDB.history[mockDB.current] || []; },
+
+  async chat({ message, has_attachment }) {
     await delay(550);
+    const employee_id = mockDB.current;
     const t = message.toLowerCase();
     const bal = mockDB.balances[employee_id];
 
@@ -206,18 +219,25 @@ function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 /* ============================================================================
  * REAL BACKEND — same interface, used when USE_MOCK = false (Phase 3).
  * ==========================================================================*/
+async function postJSON(url, body) {
+  return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}) });
+}
+
 const realApi = {
-  async employees() { return (await fetch('/api/employees')).json(); },
-  async balances(empId) { return (await fetch(`/api/balances?employee_id=${empId}`)).json(); },
-  async history(empId) { return (await fetch(`/api/history?employee_id=${empId}`)).json(); },
-  async chat(body) {
-    return (await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(body) })).json();
+  async me() { const r = await fetch('/api/me'); return r.ok ? r.json() : null; },
+  async login(body) {
+    const r = await postJSON('/api/login', body);
+    if (r.ok) return r.json();
+    const d = await r.json().catch(() => ({}));
+    return { error: d.detail || 'Invalid username or password' };
   },
-  async confirm(body) {
-    return (await fetch('/api/confirm', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(body) })).json();
-  },
+  async logout() { await postJSON('/api/logout'); },
+
+  async balances() { return (await fetch('/api/balances')).json(); },
+  async history() { return (await fetch('/api/history')).json(); },
+  async chat(body) { return (await postJSON('/api/chat', body)).json(); },
+  async confirm(body) { return (await postJSON('/api/confirm', body)).json(); },
 };
 
 const api = USE_MOCK ? mockApi : realApi;
@@ -225,7 +245,7 @@ const api = USE_MOCK ? mockApi : realApi;
 /* ============================================================================
  * UI STATE + RENDERING
  * ==========================================================================*/
-const state = { employeeId: null, attached: false };
+const state = { user: null, attached: false };
 
 const $ = (s) => document.querySelector(s);
 const messagesEl = $('#messages');
@@ -342,7 +362,7 @@ function renderHistoryPanel(items) {
     </li>`).join('');
 }
 async function refreshPanels() {
-  const [bal, hist] = await Promise.all([api.balances(state.employeeId), api.history(state.employeeId)]);
+  const [bal, hist] = await Promise.all([api.balances(), api.history()]);
   renderBalances(bal); renderHistoryPanel(hist);
 }
 
@@ -358,7 +378,7 @@ async function send(text) {
   const attached = state.attached;
   const t = typing();
   try {
-    const res = await api.chat({ employee_id: state.employeeId, message: msg, session_id: null, has_attachment: attached });
+    const res = await api.chat({ message: msg, session_id: null, has_attachment: attached });
     t.remove();
     renderReply(res);
     if (res.refresh) await refreshPanels();
@@ -395,23 +415,59 @@ function setAttached(on) {
 /* ============================================================================
  * BOOT
  * ==========================================================================*/
-async function selectEmployee(empId, name) {
-  state.employeeId = empId;
-  $('#avatar').textContent = initials(name);
+// ---- views -----------------------------------------------------------------
+function showLogin() {
+  state.user = null;
+  $('#app').classList.add('hidden');
+  $('#login').classList.remove('hidden');
+  $('#username').value = '';
+  $('#password').value = '';
+  $('#loginError').classList.add('hidden');
+  $('#username').focus();
+}
+
+async function showApp(user) {
+  state.user = user;
+  $('#login').classList.add('hidden');
+  $('#app').classList.remove('hidden');
+  $('#userName').textContent = user.name;
+  $('#userDept').textContent = user.dept || '';
+  $('#avatar').textContent = initials(user.name);
   messagesEl.innerHTML = '';
-  bubbleBot(`Hi ${esc(name.split(' ')[0])} 👋 Tell me about the leave you'd like to take — or ask "what's my leave balance?"`);
+  bubbleBot(`Hi ${esc(user.name.split(' ')[0])} 👋 Tell me about the leave you'd like to take — or ask "what's my leave balance?"`);
   await refreshPanels();
 }
 
+async function doLogin(ev) {
+  ev.preventDefault();
+  const btn = $('#loginBtn');
+  const err = $('#loginError');
+  err.classList.add('hidden');
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  try {
+    const res = await api.login({ username: $('#username').value, password: $('#password').value });
+    if (res && !res.error) { await showApp(res); }
+    else { err.textContent = (res && res.error) || 'Invalid username or password'; err.classList.remove('hidden'); }
+  } catch (e) {
+    err.textContent = 'Could not sign in. Please try again.'; err.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Sign in';
+  }
+}
+
+async function doLogout() {
+  await api.logout();
+  setAttached(false);
+  showLogin();
+}
+
+// ---- boot ------------------------------------------------------------------
 async function boot() {
   $('#mockflag').style.display = USE_MOCK ? '' : 'none';
-  const emps = await api.employees();
-  const sel = $('#employee');
-  sel.innerHTML = emps.map(e => `<option value="${e.id}">${esc(e.name)} — ${esc(e.dept)}</option>`).join('');
-  sel.addEventListener('change', () => {
-    const e = emps.find(x => x.id === sel.value);
-    selectEmployee(e.id, e.name);
-  });
+
+  // login screen
+  $('#loginForm').addEventListener('submit', doLogin);
+  $('#logout').addEventListener('click', doLogout);
 
   // composer
   $('#send').addEventListener('click', () => send($('#input').value));
@@ -433,7 +489,9 @@ async function boot() {
     else if (act === 'edit') { $('#input').focus(); bubbleBot('Sure — tell me what to change (dates, type, or duration).'); }
   });
 
-  await selectEmployee(emps[0].id, emps[0].name);
+  // resume an existing session or show login
+  const user = await api.me();
+  if (user) await showApp(user); else showLogin();
 }
 
 boot();

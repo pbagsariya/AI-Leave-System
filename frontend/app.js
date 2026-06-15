@@ -30,14 +30,18 @@ const STATUS_BADGE = {
  * ==========================================================================*/
 const mockDB = {
   employees: [
-    { id: 'e1', name: 'Asha Menon',  dept: 'Engineering' },
-    { id: 'e2', name: 'Ravi Kapoor', dept: 'Sales' },
-    { id: 'e3', name: 'Meera Iyer',  dept: 'Design' },
+    { id: 'e1', name: 'Asha Menon',       dept: 'Engineering' },
+    { id: 'e2', name: 'Ravi Kapoor',      dept: 'Sales' },
+    { id: 'e3', name: 'Meera Iyer',       dept: 'Design' },
+    { id: 'e4', name: 'Prakash Bagsariya',dept: 'Developer' },
+    { id: 'e5', name: 'Krupal Tasare',    dept: 'Engineer' },
   ],
   balances: {
     e1: { SICK: 8, CASUAL: 5, EARNED: 12, COMP_OFF: 2 },
     e2: { SICK: 6, CASUAL: 7, EARNED: 9,  COMP_OFF: 1 },
     e3: { SICK: 10, CASUAL: 4, EARNED: 14, COMP_OFF: 3 },
+    e4: { SICK: 8, CASUAL: 6, EARNED: 12, COMP_OFF: 2 },
+    e5: { SICK: 9, CASUAL: 5, EARNED: 11, COMP_OFF: 3 },
   },
   history: {
     e1: [
@@ -46,11 +50,15 @@ const mockDB = {
       { id: '#AB-10310', code:'CASUAL', label:'Casual · 19 May',status:'Cancelled' },
     ],
     e2: [ { id: '#AB-10288', code:'EARNED', label:'Earned · 10 May', status:'Approved' } ],
-    e3: [],
+    e3: [], e4: [], e5: [],
   },
   drafts: {}, // session_id -> parsed draft
   current: null, // logged-in employee id (mock)
-  creds: { asha: { pw: 'asha123', id: 'e1' }, ravi: { pw: 'ravi123', id: 'e2' }, meera: { pw: 'meera123', id: 'e3' } },
+  creds: {
+    asha: { pw: 'asha123', id: 'e1' }, ravi: { pw: 'ravi123', id: 'e2' },
+    meera: { pw: 'meera123', id: 'e3' }, prakash: { pw: 'prakash123', id: 'e4' },
+    krupal: { pw: 'krupal123', id: 'e5' },
+  },
 };
 
 const DOC_REQUIRED_OVER = { SICK: 2 };

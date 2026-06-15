@@ -57,40 +57,49 @@ def init_db() -> None:
             );
             """
         )
-        # seed once
-        if c.execute("SELECT COUNT(*) FROM employees").fetchone()[0] == 0:
-            _seed(c)
-        # seed login credentials independently (so an existing leave.db gets them)
-        if c.execute("SELECT COUNT(*) FROM credentials").fetchone()[0] == 0:
-            _seed_credentials(c)
+        # idempotent: ensure every demo employee, balance, and login exists.
+        # INSERT OR IGNORE adds new users to an existing leave.db without
+        # touching current data (e.g. drawn-down balances stay as they are).
+        for eid, name, dept in EMPLOYEES:
+            c.execute("INSERT OR IGNORE INTO employees VALUES (?,?,?,?)", (eid, name, dept, "Asia/Kolkata"))
+            for code, days in BALANCES[eid].items():
+                c.execute("INSERT OR IGNORE INTO balances VALUES (?,?,?)", (eid, code, days))
+        for username, pw, eid in CREDS:
+            c.execute("INSERT OR IGNORE INTO credentials VALUES (?,?,?)", (username, _hash(pw), eid))
+        # sample request history only on a brand-new database
+        if c.execute("SELECT COUNT(*) FROM leave_requests").fetchone()[0] == 0:
+            _seed_history(c)
 
 
 def _hash(password: str) -> str:
     return hashlib.sha256(("leave-demo::" + password).encode()).hexdigest()
 
 
-def _seed_credentials(c: sqlite3.Connection) -> None:
-    # demo logins (username, password, employee_id) — change for anything real
-    creds = [
-        ("asha", "asha123", "e1"),
-        ("ravi", "ravi123", "e2"),
-        ("meera", "meera123", "e3"),
-    ]
-    for username, pw, eid in creds:
-        c.execute("INSERT INTO credentials VALUES (?,?,?)", (username, _hash(pw), eid))
+# Demo roster. Usernames are stored lowercase; verify_login() lowercases input.
+EMPLOYEES = [
+    ("e1", "Asha Menon", "Engineering"),
+    ("e2", "Ravi Kapoor", "Sales"),
+    ("e3", "Meera Iyer", "Design"),
+    ("e4", "Prakash Bagsariya", "Developer"),
+    ("e5", "Krupal Tasare", "Engineer"),
+]
+BALANCES = {
+    "e1": {"SICK": 8, "CASUAL": 5, "EARNED": 12, "COMP_OFF": 2},
+    "e2": {"SICK": 6, "CASUAL": 7, "EARNED": 9, "COMP_OFF": 1},
+    "e3": {"SICK": 10, "CASUAL": 4, "EARNED": 14, "COMP_OFF": 3},
+    "e4": {"SICK": 8, "CASUAL": 6, "EARNED": 12, "COMP_OFF": 2},
+    "e5": {"SICK": 9, "CASUAL": 5, "EARNED": 11, "COMP_OFF": 3},
+}
+CREDS = [
+    ("asha", "asha123", "e1"),
+    ("ravi", "ravi123", "e2"),
+    ("meera", "meera123", "e3"),
+    ("prakash", "prakash123", "e4"),
+    ("krupal", "krupal123", "e5"),
+]
 
 
-def _seed(c: sqlite3.Connection) -> None:
-    employees = [
-        ("e1", "Asha Menon", "Engineering"),
-        ("e2", "Ravi Kapoor", "Sales"),
-        ("e3", "Meera Iyer", "Design"),
-    ]
-    balances = {
-        "e1": {"SICK": 8, "CASUAL": 5, "EARNED": 12, "COMP_OFF": 2},
-        "e2": {"SICK": 6, "CASUAL": 7, "EARNED": 9, "COMP_OFF": 1},
-        "e3": {"SICK": 10, "CASUAL": 4, "EARNED": 14, "COMP_OFF": 3},
-    }
+def _seed_history(c: sqlite3.Connection) -> None:
     history = {
         "e1": [
             ("#AB-10391", "SICK", "Sick · 02 Jun", "Approved"),
@@ -98,15 +107,10 @@ def _seed(c: sqlite3.Connection) -> None:
             ("#AB-10310", "CASUAL", "Casual · 19 May", "Cancelled"),
         ],
         "e2": [("#AB-10288", "EARNED", "Earned · 10 May", "Approved")],
-        "e3": [],
     }
-    for eid, name, dept in employees:
-        c.execute("INSERT INTO employees VALUES (?,?,?,?)", (eid, name, dept, "Asia/Kolkata"))
-        for code, days in balances[eid].items():
-            c.execute("INSERT INTO balances VALUES (?,?,?)", (eid, code, days))
-        # seed history with descending timestamps so order is stable
-        base = dt.datetime(2026, 6, 1, 9, 0, 0)
-        for i, (rid, code, label, status) in enumerate(history[eid]):
+    base = dt.datetime(2026, 6, 1, 9, 0, 0)
+    for eid, rows in history.items():
+        for i, (rid, code, label, status) in enumerate(rows):
             ts = (base - dt.timedelta(days=i)).isoformat()
             c.execute(
                 "INSERT INTO leave_requests VALUES (?,?,?,?,?,?,?,?,?,?)",

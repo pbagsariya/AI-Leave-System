@@ -30,11 +30,13 @@ uvicorn backend.main:app --reload     # run from the repo root
 ### Logging in
 Opening the app shows a **login screen**. Demo accounts (seeded into `leave.db`):
 
-| Username | Password   | Employee            |
-|----------|------------|---------------------|
-| `asha`   | `asha123`  | Asha Menon (Eng)    |
-| `ravi`   | `ravi123`  | Ravi Kapoor (Sales) |
-| `meera`  | `meera123` | Meera Iyer (Design) |
+| Username  | Password     | Employee                       |
+|-----------|--------------|--------------------------------|
+| `asha`    | `asha123`    | Asha Menon (Engineering)       |
+| `ravi`    | `ravi123`    | Ravi Kapoor (Sales)            |
+| `meera`   | `meera123`   | Meera Iyer (Design)            |
+| `prakash` | `prakash123` | Prakash Bagsariya (Developer)  |
+| `krupal`  | `krupal123`  | Krupal Tasare (Engineer)       |
 
 Sign-in creates a server session (HTTP-only cookie); the backend derives your
 identity from it, so you only see and act on your own leave. **Logout** clears

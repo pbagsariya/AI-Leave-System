@@ -22,6 +22,7 @@ const CODE_LABEL = { SICK:'Sick Leave', CASUAL:'Casual Leave', EARNED:'Earned Le
 const STATUS_BADGE = {
   Pending:   'bg-amber-100 text-amber-700',
   Approved:  'bg-emerald-100 text-emerald-700',
+  Rejected:  'bg-rose-100 text-rose-700',
   Cancelled: 'bg-slate-100 text-slate-500',
 };
 
@@ -135,6 +136,30 @@ const mockApi = {
 
   async balances() { return mockDB.balances[mockDB.current]; },
   async history() { return mockDB.history[mockDB.current] || []; },
+  async approvals() {
+    const out = [];
+    for (const [eid, items] of Object.entries(mockDB.history)) {
+      if (eid === mockDB.current) continue;
+      const emp = mockDB.employees.find(e => e.id === eid);
+      for (const h of items) if (h.status === 'Pending')
+        out.push({ id: h.id, employee_id: eid, employee_name: emp ? emp.name : eid,
+                   dept: emp ? emp.dept : '', code: h.code, label: h.label, duration_days: h.duration });
+    }
+    return out;
+  },
+  _find(id) { for (const items of Object.values(mockDB.history)) { const h = items.find(x => x.id === id); if (h) return h; } return null; },
+  async approve({ request_id }) { const h = this._find(request_id); if (h && h.status === 'Pending') h.status = 'Approved'; return { ok: true }; },
+  async reject({ request_id }) {
+    for (const [eid, items] of Object.entries(mockDB.history)) {
+      const h = items.find(x => x.id === request_id);
+      if (h && h.status === 'Pending') {
+        h.status = 'Rejected';
+        if (mockDB.balances[eid] && mockDB.balances[eid][h.code] !== undefined && h.duration) mockDB.balances[eid][h.code] += h.duration;
+        return { ok: true };
+      }
+    }
+    return { error: 'Request is no longer pending' };
+  },
 
   async chat({ message, has_attachment }) {
     await delay(550);
@@ -267,6 +292,9 @@ const realApi = {
   async history() { return (await fetch('/api/history')).json(); },
   async chat(body) { return (await postJSON('/api/chat', body)).json(); },
   async confirm(body) { return (await postJSON('/api/confirm', body)).json(); },
+  async approvals() { return (await fetch('/api/approvals')).json(); },
+  async approve(body) { return (await postJSON('/api/approve', body)).json(); },
+  async reject(body) { return (await postJSON('/api/reject', body)).json(); },
 };
 
 const api = USE_MOCK ? mockApi : realApi;
@@ -393,6 +421,30 @@ function renderHistoryPanel(items) {
 async function refreshPanels() {
   const [bal, hist] = await Promise.all([api.balances(), api.history()]);
   renderBalances(bal); renderHistoryPanel(hist);
+  if (state.user && state.user.role === 'Manager') await refreshApprovals();
+}
+
+function renderApprovals(items) {
+  const el = $('#approvals');
+  if (!items.length) { el.innerHTML = `<p class="px-5 py-4 text-sm text-slate-400">No pending requests right now.</p>`; return; }
+  el.innerHTML = items.map(r => `
+    <div class="px-5 py-3 border-b border-slate-100 last:border-0">
+      <div class="flex items-center justify-between gap-2">
+        <div>
+          <p class="text-sm font-medium">${esc(r.employee_name)}</p>
+          <p class="text-[11px] text-slate-400">${esc(r.label)} · ${esc(r.id)}</p>
+        </div>
+        <div class="flex gap-1.5 shrink-0">
+          <button data-approve="${esc(r.id)}" class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600">Approve</button>
+          <button data-reject="${esc(r.id)}" class="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Reject</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function refreshApprovals() {
+  const items = await api.approvals();
+  renderApprovals(Array.isArray(items) ? items : []);
 }
 
 /* ============================================================================
@@ -476,6 +528,7 @@ async function showApp(user) {
   $('#userName').textContent = user.name;
   $('#userDept').textContent = [user.dept, user.role].filter(Boolean).join(' · ');
   $('#avatar').textContent = initials(user.name);
+  $('#approvalsCard').classList.toggle('hidden', user.role !== 'Manager');
   messagesEl.innerHTML = '';
   bubbleBot(`Hi ${esc(user.name.split(' ')[0])} 👋 Tell me about the leave you'd like to take — or ask "what's my leave balance?"`);
   await refreshPanels();
@@ -545,6 +598,18 @@ async function boot() {
   $('#attach').addEventListener('click', () => setAttached(!state.attached));
   $('#chips').addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-fill]'); if (b) send(b.dataset.fill);
+  });
+
+  // approvals (event delegation)
+  $('#approvals').addEventListener('click', async (ev) => {
+    const a = ev.target.closest('[data-approve]');
+    const r = ev.target.closest('[data-reject]');
+    if (!a && !r) return;
+    const id = (a || r).dataset.approve || (a || r).dataset.reject;
+    ev.target.disabled = true;
+    if (a) await api.approve({ request_id: id });
+    else await api.reject({ request_id: id });
+    await refreshApprovals();
   });
 
   // confirmation card buttons (event delegation)

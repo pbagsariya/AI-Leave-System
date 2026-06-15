@@ -44,10 +44,15 @@ it. Passwords are SHA-256 hashed in the `credentials` table — demo-grade auth,
 not production-hardened; change the seeded logins there for anything real.
 
 **Sign up** — the login screen has a *Create a new account* link. You can
-register as an **Employee** or **Manager**; the account is created with a
-starting balance and you're signed straight in. The chosen role is shown in the
-header. (Manager-specific features like approvals aren't wired yet — the role is
-stored and displayed.)
+register as an **Employee** or **Manager** (pick the role on the form); the
+account is created with a starting balance and you're signed straight in.
+
+**Manager approvals** — a Manager sees a **Pending approvals** panel listing
+every *other* employee's pending request, with **Approve** / **Reject** buttons.
+Approving marks the request Approved; rejecting marks it Rejected and returns the
+days to that employee's balance. The endpoints (`/api/approvals`, `/api/approve`,
+`/api/reject`) require the Manager role (403 otherwise). Asha is a seeded Manager;
+or sign up a new one.
 
 **AI is automatic — nothing to configure.** On startup the app tries Claude; if
 it's reachable it uses the model, otherwise it switches to a built-in
@@ -69,6 +74,7 @@ clarifying question. Real Claude handles all free-form phrasing.
 - **Check balance** — "what's my leave balance?"
 - **View history** — "show my history", or filter: "show approved leaves".
 - **Cancel** — "cancel #AB-10692" (restores the days to your balance).
+- **Approve / reject** (Managers) — review and act on the team's pending leave.
 
 Guardrails (deterministic, never the model): closed leave-code list, balance
 checks, the medical-certificate rule for sick leave > 2 days, and a

@@ -221,6 +221,25 @@ def get_history(employee_id: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def get_pending_requests(exclude_employee: Optional[str] = None) -> list[dict]:
+    """All pending leave requests joined with the requester, newest first.
+    Optionally excludes one employee (so a manager doesn't approve their own)."""
+    q = (
+        "SELECT r.id, r.employee_id, e.name AS employee_name, e.dept AS dept, "
+        "       r.code, r.label, r.duration_days, r.created_at "
+        "FROM leave_requests r JOIN employees e ON e.id = r.employee_id "
+        "WHERE r.status = 'Pending'"
+    )
+    params: list = []
+    if exclude_employee:
+        q += " AND r.employee_id != ?"
+        params.append(exclude_employee)
+    q += " ORDER BY r.created_at DESC"
+    with _conn() as c:
+        rows = c.execute(q, params).fetchall()
+    return [dict(r) for r in rows]
+
+
 # ---- session drafts (replaces Redis) ---------------------------------------
 
 def save_draft(session_id: str, employee_id: str, draft: dict) -> None:

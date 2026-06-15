@@ -78,6 +78,10 @@ class ConfirmIn(BaseModel):
     session_id: str
 
 
+class ReqIdIn(BaseModel):
+    request_id: str
+
+
 # ---- auth ------------------------------------------------------------------
 
 def current_emp(session: str | None = Cookie(default=None)) -> str:
@@ -131,6 +135,42 @@ def logout(response: Response, session: str | None = Cookie(default=None)):
 @app.get("/api/me")
 def me(emp: str = Depends(current_emp)):
     return db.get_employee(emp)
+
+
+def current_manager(emp: str = Depends(current_emp)) -> str:
+    """Like current_emp, but requires the Manager role (else 403)."""
+    e = db.get_employee(emp)
+    if not e or e.get("role") != "Manager":
+        raise HTTPException(status_code=403, detail="Manager access required")
+    return emp
+
+
+# ---- API: manager approvals ------------------------------------------------
+
+@app.get("/api/approvals")
+def approvals(mgr: str = Depends(current_manager)):
+    return db.get_pending_requests(exclude_employee=mgr)
+
+
+@app.post("/api/approve")
+def approve(body: ReqIdIn, mgr: str = Depends(current_manager)):
+    req = db.get_request(body.request_id)
+    if not req or req["status"] != "Pending":
+        return {"error": "Request is no longer pending"}
+    db.set_request_status(body.request_id, "Approved")
+    return {"ok": True, "request_id": body.request_id, "status": "Approved"}
+
+
+@app.post("/api/reject")
+def reject(body: ReqIdIn, mgr: str = Depends(current_manager)):
+    req = db.get_request(body.request_id)
+    if not req or req["status"] != "Pending":
+        return {"error": "Request is no longer pending"}
+    db.set_request_status(body.request_id, "Rejected")
+    # give the days back to the requester (submission had deducted them)
+    if req["code"] and req["duration_days"]:
+        db.credit_balance(req["employee_id"], req["code"], req["duration_days"])
+    return {"ok": True, "request_id": body.request_id, "status": "Rejected"}
 
 
 # ---- helpers ---------------------------------------------------------------

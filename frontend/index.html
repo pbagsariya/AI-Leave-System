@@ -158,6 +158,15 @@
 
       <!-- ===== Side panel ===== -->
       <aside class="space-y-6">
+        <!-- Manager-only approvals -->
+        <div id="approvalsCard" class="hidden bg-white rounded-2xl border border-brand-100 shadow-sm">
+          <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+            <h2 class="text-sm font-semibold">Pending approvals</h2>
+            <span class="text-[10px] uppercase tracking-wide text-brand-600 bg-brand-50 border border-brand-100 rounded-full px-2 py-0.5">Manager</span>
+          </div>
+          <div id="approvals"></div>
+        </div>
+
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm">
           <div class="px-5 py-3.5 border-b border-slate-100"><h2 class="text-sm font-semibold">Leave balances</h2></div>
           <div class="p-4 space-y-3" id="balances"></div>

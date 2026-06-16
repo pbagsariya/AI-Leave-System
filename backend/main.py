@@ -193,6 +193,15 @@ def _fmt_short(iso: str | None) -> str:
     return dt.date.fromisoformat(iso).strftime("%d %b")
 
 
+def _new_request_id() -> str:
+    """A unique #AB-##### id (avoids PK collisions as the table grows)."""
+    for _ in range(100):
+        rid = f"#AB-{random.randint(10000, 99999)}"
+        if not db.get_request(rid):
+            return rid
+    return "#AB-" + secrets.token_hex(3)
+
+
 def _cancel(emp: str, text: str, bal: dict) -> dict:
     m = re.search(r"#?\s*ab[-\s]?(\d+)", text, re.I)
     if not m:
@@ -327,7 +336,7 @@ def confirm(body: ConfirmIn, emp: str = Depends(current_emp)):
     if code in bal:
         db.decrement_balance(emp, code, duration)
 
-    req_id = f"#AB-{random.randint(10400, 10999)}"
+    req_id = _new_request_id()
     if draft.get("end_date") and draft["start_date"] != draft["end_date"]:
         rng = f"{_fmt_short(draft['start_date'])}–{_fmt_short(draft['end_date'])}"
     else:

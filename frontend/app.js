@@ -556,7 +556,7 @@ async function doSignup(ev) {
   const btn = $('#signupBtn');
   const err = $('#signupError');
   err.classList.add('hidden');
-  const role = (document.querySelector('#suRole input:checked') || {}).value || 'Employee';
+  const role = $('#suRole').value || 'Employee';
   const body = {
     name: $('#suName').value, dept: $('#suDept').value,
     username: $('#suUsername').value, password: $('#suPassword').value, role,

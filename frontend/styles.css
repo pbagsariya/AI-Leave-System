@@ -44,24 +44,6 @@
 
 .badge { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
 
-.role-opt {
-  display: block;
-  text-align: center;
-  border: 1px solid #e2e8f0;
-  border-radius: 9px;
-  padding: 9px;
-  font-size: 13px;
-  color: #475569;
-  cursor: pointer;
-  transition: all .15s;
-}
-.role-opt:has(input:checked) {
-  border-color: #0f766e;
-  background: #eef5f4;
-  color: #0b544e;
-  font-weight: 600;
-}
-
 .chip {
   font-size: 12px;
   font-weight: 500;

@@ -82,9 +82,12 @@
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">Role</label>
-          <div class="grid grid-cols-2 gap-2" id="suRole">
-            <label class="role-opt"><input type="radio" name="role" value="Employee" checked class="sr-only" /><span>Employee</span></label>
-            <label class="role-opt"><input type="radio" name="role" value="Manager" class="sr-only" /><span>Manager</span></label>
+          <div class="relative">
+            <select id="suRole" class="w-full appearance-none border border-slate-200 rounded-lg pl-3 pr-9 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30">
+              <option value="Employee">Employee</option>
+              <option value="Manager">Manager</option>
+            </select>
+            <svg class="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </div>
         </div>
         <div>

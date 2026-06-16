@@ -86,6 +86,14 @@ def init_db() -> None:
         if c.execute("SELECT COUNT(*) FROM leave_requests").fetchone()[0] == 0:
             _seed_history(c)
 
+        # managers can no longer apply, so cancel any pending requests they
+        # authored before that rule — keeps them out of approval queues
+        c.execute(
+            "UPDATE leave_requests SET status = 'Cancelled' "
+            "WHERE status = 'Pending' AND employee_id IN "
+            "(SELECT id FROM employees WHERE role = 'Manager')"
+        )
+
 
 def _hash(password: str) -> str:
     return hashlib.sha256(("leave-demo::" + password).encode()).hexdigest()

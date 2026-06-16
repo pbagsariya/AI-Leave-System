@@ -424,7 +424,6 @@ function renderHistoryPanel(items) {
 async function refreshPanels() {
   const [bal, hist] = await Promise.all([api.balances(), api.history()]);
   renderBalances(bal); renderHistoryPanel(hist);
-  if (state.user && state.user.role === 'Manager') await refreshApprovals();
 }
 
 function renderApprovals(items) {
@@ -533,10 +532,23 @@ async function showApp(user) {
   $('#userName').textContent = user.name;
   $('#userDept').textContent = [user.dept, user.role].filter(Boolean).join(' · ');
   $('#avatar').textContent = initials(user.name);
-  $('#approvalsCard').classList.toggle('hidden', user.role !== 'Manager');
-  messagesEl.innerHTML = '';
-  bubbleBot(`Hi ${esc(user.name.split(' ')[0])} 👋 Tell me about the leave you'd like to take — or ask "what's my leave balance?"`);
-  await refreshPanels();
+
+  // A Manager only reviews others' requests — no chat/apply or personal balances.
+  const mgr = user.role === 'Manager';
+  $('#chatPanel').classList.toggle('hidden', mgr);
+  $('#balancesCard').classList.toggle('hidden', mgr);
+  $('#historyCard').classList.toggle('hidden', mgr);
+  $('#approvalsCard').classList.toggle('hidden', !mgr);
+  $('#main').classList.toggle('lg:grid-cols-[1fr_320px]', !mgr);
+  $('#main').classList.toggle('lg:grid-cols-1', mgr);
+
+  if (mgr) {
+    await refreshApprovals();
+  } else {
+    messagesEl.innerHTML = '';
+    bubbleBot(`Hi ${esc(user.name.split(' ')[0])} 👋 Tell me about the leave you'd like to take — or ask "what's my leave balance?"`);
+    await refreshPanels();
+  }
 }
 
 async function doLogin(ev) {

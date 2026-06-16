@@ -385,6 +385,8 @@ def chat(body: ChatIn, emp: str = Depends(current_emp)):
 
 @app.post("/api/confirm")
 def confirm(body: ConfirmIn, emp: str = Depends(current_emp)):
+    if (db.get_employee(emp) or {}).get("role") == "Manager":
+        return {"error": "Managers cannot apply for leave"}
     draft = db.get_draft(body.session_id)
     if not draft or draft["employee_id"] != emp:
         return {"error": "draft expired"}

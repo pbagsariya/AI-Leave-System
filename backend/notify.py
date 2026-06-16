@@ -68,6 +68,20 @@ def send_email(to_email: str | None, subject: str, body: str) -> None:
 
 # ---- message builders ------------------------------------------------------
 
+def notify_registration(employee: dict) -> None:
+    """Welcome / confirmation email when an account is created."""
+    send_email(
+        employee.get("email"),
+        "Welcome to Leave Assistant - registration confirmed",
+        f"Hi {employee['name']},\n\n"
+        f"Your account has been created successfully.\n\n"
+        f"  Name       : {employee['name']}\n"
+        f"  Role       : {employee.get('role', 'Employee')}\n"
+        f"  Department : {employee.get('dept', '')}\n\n"
+        f"You can now sign in and start managing leave.\n",
+    )
+
+
 def notify_leave_submitted(employee: dict, managers: list[dict], req_id: str,
                            label: str, date_range: str) -> None:
     """Email the requester (confirmation) and each manager (action needed)."""

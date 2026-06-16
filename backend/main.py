@@ -139,7 +139,9 @@ def signup(body: SignupIn, response: Response):
 
     role = "Manager" if body.role == "Manager" else "Employee"
     emp = db.create_account(username, pw, name, dept, role, email)
-    return _start_session(emp, response)  # auto-login after signup
+    user = _start_session(emp, response)  # auto-login after signup
+    notify.notify_registration(user)     # confirmation email
+    return user
 
 
 @app.post("/api/login")

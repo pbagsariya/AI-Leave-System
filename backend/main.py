@@ -30,6 +30,7 @@ from pydantic import BaseModel
 
 from . import db
 from . import leave_logic as L
+from . import notify
 
 app = FastAPI(title="Leave Assistant")
 app.add_middleware(
@@ -63,6 +64,7 @@ class LoginIn(BaseModel):
 class SignupIn(BaseModel):
     name: str
     dept: str = ""
+    email: str = ""
     username: str
     password: str
     role: str = "Employee"
@@ -109,10 +111,13 @@ def signup(body: SignupIn, response: Response):
         raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
     if " " in username:
         raise HTTPException(status_code=400, detail="Username cannot contain spaces")
+    email = body.email.strip()
+    if email and ("@" not in email or "." not in email.split("@")[-1]):
+        raise HTTPException(status_code=400, detail="Please enter a valid email address")
     if db.username_exists(username):
         raise HTTPException(status_code=409, detail="That username is already taken")
     role = "Manager" if body.role == "Manager" else "Employee"
-    emp = db.create_account(username, body.password, name, body.dept, role)
+    emp = db.create_account(username, body.password, name, body.dept, role, email)
     return _start_session(emp, response)  # auto-login after signup
 
 
@@ -158,6 +163,7 @@ def approve(body: ReqIdIn, mgr: str = Depends(current_manager)):
     if not req or req["status"] != "Pending":
         return {"error": "Request is no longer pending"}
     db.set_request_status(body.request_id, "Approved")
+    notify.notify_decision(db.get_employee(req["employee_id"]), body.request_id, "Approved")
     return {"ok": True, "request_id": body.request_id, "status": "Approved"}
 
 
@@ -170,6 +176,7 @@ def reject(body: ReqIdIn, mgr: str = Depends(current_manager)):
     # give the days back to the requester (submission had deducted them)
     if req["code"] and req["duration_days"]:
         db.credit_balance(req["employee_id"], req["code"], req["duration_days"])
+    notify.notify_decision(db.get_employee(req["employee_id"]), body.request_id, "Rejected")
     return {"ok": True, "request_id": body.request_id, "status": "Rejected"}
 
 
@@ -341,14 +348,18 @@ def confirm(body: ConfirmIn, emp: str = Depends(current_emp)):
         rng = f"{_fmt_short(draft['start_date'])}–{_fmt_short(draft['end_date'])}"
     else:
         rng = _fmt_short(draft["start_date"])
+    label = f"{BAL_LABEL.get(code, code)} · {rng}"
     db.insert_request({
-        "id": req_id, "employee_id": emp, "code": code,
-        "label": f"{BAL_LABEL.get(code, code)} · {rng}",
+        "id": req_id, "employee_id": emp, "code": code, "label": label,
         "start_date": draft["start_date"], "end_date": draft["end_date"],
         "duration_days": duration, "comments": "", "status": "Pending",
     })
     db.delete_draft(body.session_id)
-    return {"request_id": req_id, "status": "Pending", "balances": db.get_balances(emp)}
+
+    # notify the requester (confirmation) and the managers (action needed)
+    notify.notify_leave_submitted(db.get_employee(emp), db.get_managers(), req_id, label, rng)
+
+    return {"request_id": req_id, "status": "Pending", "balances": db.get_balances(emp), "notified": True}
 
 
 # ---- serve the frontend (mounted last so /api/* wins) ----------------------

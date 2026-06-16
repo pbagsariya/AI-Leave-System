@@ -118,14 +118,15 @@ const mockApi = {
     return { error: 'Invalid username or password' };
   },
   async logout() { mockDB.current = null; },
-  async signup({ name, dept, username, password, role }) {
+  async signup({ name, dept, email, username, password, role }) {
     const u = (username || '').trim().toLowerCase();
     if (!name || !u || !password) return { error: 'Name, username and password are required' };
     if (password.length < 4) return { error: 'Password must be at least 4 characters' };
     if (u.includes(' ')) return { error: 'Username cannot contain spaces' };
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: 'Please enter a valid email address' };
     if (mockDB.creds[u]) return { error: 'That username is already taken' };
     const id = 'u' + Math.random().toString(16).slice(2, 10);
-    const emp = { id, name: name.trim(), dept: (dept || '—').trim(), role: role === 'Manager' ? 'Manager' : 'Employee' };
+    const emp = { id, name: name.trim(), dept: (dept || '—').trim(), email: (email || '').trim(), role: role === 'Manager' ? 'Manager' : 'Employee' };
     mockDB.employees.push(emp);
     mockDB.balances[id] = { SICK: 10, CASUAL: 8, EARNED: 15, COMP_OFF: 4 };
     mockDB.history[id] = [];
@@ -480,7 +481,8 @@ async function confirmDraft(cardEl) {
   botRow(`<div class="bubble-bot border border-emerald-200 bg-emerald-50">
     <span class="font-medium text-emerald-700">Submitted.</span> Request
     <span class="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-emerald-200">${esc(res.request_id)}</span>
-    sent to your manager for approval.</div>`, '✓', 'bg-emerald-500');
+    sent to your manager for approval.
+    <span class="block mt-1 text-[11px] text-emerald-600">📧 A confirmation was emailed to you, and your manager was notified.</span></div>`, '✓', 'bg-emerald-500');
   await refreshPanels();
 }
 
@@ -558,7 +560,7 @@ async function doSignup(ev) {
   err.classList.add('hidden');
   const role = $('#suRole').value || 'Employee';
   const body = {
-    name: $('#suName').value, dept: $('#suDept').value,
+    name: $('#suName').value, dept: $('#suDept').value, email: $('#suEmail').value,
     username: $('#suUsername').value, password: $('#suPassword').value, role,
   };
   btn.disabled = true; btn.textContent = 'Creating…';

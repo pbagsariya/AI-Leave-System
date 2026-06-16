@@ -33,7 +33,7 @@ def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS employees (
                 id TEXT PRIMARY KEY, name TEXT, dept TEXT, timezone TEXT,
-                role TEXT DEFAULT 'Employee'
+                role TEXT DEFAULT 'Employee', email TEXT
             );
             CREATE TABLE IF NOT EXISTS balances (
                 employee_id TEXT, code TEXT, days REAL,
@@ -57,21 +57,27 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS auth_sessions (
                 token TEXT PRIMARY KEY, employee_id TEXT, created_at TEXT
             );
+            CREATE TABLE IF NOT EXISTS email_outbox (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, to_email TEXT, subject TEXT,
+                body TEXT, status TEXT, created_at TEXT
+            );
             """
         )
-        # migrate an older leave.db that predates the role column
+        # migrate an older leave.db that predates the role / email columns
         cols = [r["name"] for r in c.execute("PRAGMA table_info(employees)")]
         if "role" not in cols:
             c.execute("ALTER TABLE employees ADD COLUMN role TEXT DEFAULT 'Employee'")
+        if "email" not in cols:
+            c.execute("ALTER TABLE employees ADD COLUMN email TEXT")
 
         # idempotent: ensure every demo employee, balance, and login exists.
         # INSERT OR IGNORE adds new users to an existing leave.db without
         # touching current data (e.g. drawn-down balances stay as they are).
-        for eid, name, dept, role in EMPLOYEES:
-            c.execute("INSERT OR IGNORE INTO employees (id, name, dept, timezone, role) VALUES (?,?,?,?,?)",
-                      (eid, name, dept, "Asia/Kolkata", role))
-            # keep the seeded role authoritative even on an older leave.db
-            c.execute("UPDATE employees SET role = ? WHERE id = ?", (role, eid))
+        for eid, name, dept, role, email in EMPLOYEES:
+            c.execute("INSERT OR IGNORE INTO employees (id, name, dept, timezone, role, email) VALUES (?,?,?,?,?,?)",
+                      (eid, name, dept, "Asia/Kolkata", role, email))
+            # keep the seeded role/email authoritative even on an older leave.db
+            c.execute("UPDATE employees SET role = ?, email = ? WHERE id = ?", (role, email, eid))
             for code, days in BALANCES[eid].items():
                 c.execute("INSERT OR IGNORE INTO balances VALUES (?,?,?)", (eid, code, days))
         for username, pw, eid in CREDS:
@@ -85,14 +91,15 @@ def _hash(password: str) -> str:
     return hashlib.sha256(("leave-demo::" + password).encode()).hexdigest()
 
 
-# Demo roster (id, name, dept, role). Usernames are stored lowercase;
-# verify_login() lowercases input.
+# Demo roster (id, name, dept, role, email). Usernames are stored lowercase;
+# verify_login() lowercases input. Emails are placeholders — change them (or
+# sign up with a real address) to receive real notifications via SMTP.
 EMPLOYEES = [
-    ("e1", "Asha Menon", "Engineering", "Manager"),
-    ("e2", "Ravi Kapoor", "Sales", "Employee"),
-    ("e3", "Meera Iyer", "Design", "Employee"),
-    ("e4", "Prakash Bagsariya", "Developer", "Employee"),
-    ("e5", "Krupal Tasare", "Engineer", "Employee"),
+    ("e1", "Asha Menon", "Engineering", "Manager", "asha@example.com"),
+    ("e2", "Ravi Kapoor", "Sales", "Employee", "ravi@example.com"),
+    ("e3", "Meera Iyer", "Design", "Employee", "meera@example.com"),
+    ("e4", "Prakash Bagsariya", "Developer", "Employee", "prakash@example.com"),
+    ("e5", "Krupal Tasare", "Engineer", "Employee", "krupal@example.com"),
 ]
 
 # Starting allotment granted to a freshly signed-up account.
@@ -136,14 +143,28 @@ def _seed_history(c: sqlite3.Connection) -> None:
 
 def get_employees() -> list[dict]:
     with _conn() as c:
-        rows = c.execute("SELECT id, name, dept, role FROM employees ORDER BY name").fetchall()
+        rows = c.execute("SELECT id, name, dept, role, email FROM employees ORDER BY name").fetchall()
     return [dict(r) for r in rows]
 
 
 def get_employee(employee_id: str) -> Optional[dict]:
     with _conn() as c:
-        row = c.execute("SELECT id, name, dept, role FROM employees WHERE id = ?", (employee_id,)).fetchone()
+        row = c.execute("SELECT id, name, dept, role, email FROM employees WHERE id = ?", (employee_id,)).fetchone()
     return dict(row) if row else None
+
+
+def get_managers() -> list[dict]:
+    with _conn() as c:
+        rows = c.execute("SELECT id, name, email FROM employees WHERE role = 'Manager'").fetchall()
+    return [dict(r) for r in rows]
+
+
+def log_email(to_email: str, subject: str, body: str, status: str) -> None:
+    with _conn() as c:
+        c.execute(
+            "INSERT INTO email_outbox (to_email, subject, body, status, created_at) VALUES (?,?,?,?,?)",
+            (to_email, subject, body, status, dt.datetime.now().isoformat()),
+        )
 
 
 # ---- auth -------------------------------------------------------------------
@@ -155,14 +176,14 @@ def username_exists(username: str) -> bool:
         ).fetchone() is not None
 
 
-def create_account(username: str, password: str, name: str, dept: str, role: str) -> str:
+def create_account(username: str, password: str, name: str, dept: str, role: str, email: str = "") -> str:
     """Create an employee + balances + login. Returns the new employee_id."""
     username = username.strip().lower()
     eid = "u" + secrets.token_hex(4)
     with _conn() as c:
         c.execute(
-            "INSERT INTO employees (id, name, dept, timezone, role) VALUES (?,?,?,?,?)",
-            (eid, name.strip(), dept.strip() or "—", "Asia/Kolkata", role),
+            "INSERT INTO employees (id, name, dept, timezone, role, email) VALUES (?,?,?,?,?,?)",
+            (eid, name.strip(), dept.strip() or "—", "Asia/Kolkata", role, email.strip()),
         )
         for code, days in DEFAULT_NEW_BALANCES.items():
             c.execute("INSERT INTO balances VALUES (?,?,?)", (eid, code, days))

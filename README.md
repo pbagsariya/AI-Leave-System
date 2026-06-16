@@ -54,6 +54,26 @@ days to that employee's balance. The endpoints (`/api/approvals`, `/api/approve`
 `/api/reject`) require the Manager role (403 otherwise). Asha is a seeded Manager;
 or sign up a new one.
 
+**Email notifications** — signup includes an **Email** field. When a leave is
+submitted, the requester gets a confirmation email and every Manager gets an
+"approval needed" email; on approve/reject the requester gets a decision email.
+By default (no SMTP configured) emails are **logged to the server console** and
+stored in the `email_outbox` table — the demo works with zero setup. To send
+**real** email, set these env vars before running (Gmail example, using an
+[App Password](https://support.google.com/accounts/answer/185833)):
+
+```bash
+export SMTP_HOST=smtp.gmail.com
+export SMTP_PORT=587
+export SMTP_USER=you@gmail.com
+export SMTP_PASS=your-16-char-app-password
+export SMTP_FROM=you@gmail.com        # optional
+```
+
+To actually receive the manager emails, the Manager account needs a real address
+— change the seeded ones in `backend/db.py` (`EMPLOYEES`) or sign up a Manager
+with your own email.
+
 **AI is automatic — nothing to configure.** On startup the app tries Claude; if
 it's reachable it uses the model, otherwise it switches to a built-in
 deterministic parser for the session (and stops retrying). So:

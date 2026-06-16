@@ -35,16 +35,16 @@
         </div>
       </div>
 
-      <form id="loginForm" class="space-y-3">
+      <form id="loginForm" class="space-y-3" novalidate>
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">Username</label>
-          <input id="username" type="text" autocomplete="username" autofocus
+          <input id="username" type="text" required autocomplete="username" autofocus
             class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">Password</label>
           <div class="relative">
-            <input id="password" type="password" autocomplete="current-password"
+            <input id="password" type="password" required autocomplete="current-password"
               class="w-full border border-slate-200 rounded-lg px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
             <button type="button" class="pw-toggle" data-target="password" aria-label="Show password">
               <svg class="eye-show w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
@@ -57,12 +57,6 @@
       </form>
 
       <button id="toSignup" type="button" class="w-full text-center text-xs text-brand-600 hover:underline mt-4">Create a new account</button>
-
-      <div class="mt-4 pt-4 border-t border-slate-100 text-[11px] text-slate-400 leading-relaxed">
-        <span class="font-medium text-slate-500">Demo logins</span><br />
-        asha / asha123 · ravi / ravi123 · meera / meera123<br />
-        prakash / prakash123 · krupal / krupal123
-      </div>
     </div>
   </div>
 

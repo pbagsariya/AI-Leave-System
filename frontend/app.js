@@ -543,9 +543,17 @@ async function doLogin(ev) {
   const btn = $('#loginBtn');
   const err = $('#loginError');
   err.classList.add('hidden');
+
+  const username = $('#username').value.trim();
+  const password = $('#password').value;
+  let msg = '';
+  if (!username) msg = 'Username is required';
+  else if (!password) msg = 'Password is required';
+  if (msg) { err.textContent = msg; err.classList.remove('hidden'); return; }
+
   btn.disabled = true; btn.textContent = 'Signing in…';
   try {
-    const res = await api.login({ username: $('#username').value, password: $('#password').value });
+    const res = await api.login({ username, password });
     if (res && !res.error) { await showApp(res); }
     else { err.textContent = (res && res.error) || 'Invalid username or password'; err.classList.remove('hidden'); }
   } catch (e) {

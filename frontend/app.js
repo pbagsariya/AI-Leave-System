@@ -522,6 +522,7 @@ function showSignup() {
   hideAuthViews();
   $('#signup').classList.remove('hidden');
   $('#signupError').classList.add('hidden');
+  $('#suMatch').classList.add('hidden');
   $('#suName').focus();
 }
 
@@ -560,6 +561,21 @@ async function doLogin(ev) {
     err.textContent = 'Could not sign in. Please try again.'; err.classList.remove('hidden');
   } finally {
     btn.disabled = false; btn.textContent = 'Sign in';
+  }
+}
+
+function checkPwMatch() {
+  const pw = $('#suPassword').value;
+  const cpw = $('#suConfirm').value;
+  const el = $('#suMatch');
+  if (!cpw) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  if (pw === cpw) {
+    el.textContent = '✓ Passwords match';
+    el.className = 'text-[11px] mt-1 text-emerald-600';
+  } else {
+    el.textContent = '✗ Passwords do not match';
+    el.className = 'text-[11px] mt-1 text-rose-600';
   }
 }
 
@@ -630,6 +646,8 @@ async function boot() {
   // auth screens
   $('#loginForm').addEventListener('submit', doLogin);
   $('#signupForm').addEventListener('submit', doSignup);
+  $('#suPassword').addEventListener('input', checkPwMatch);
+  $('#suConfirm').addEventListener('input', checkPwMatch);
   $('#toSignup').addEventListener('click', showSignup);
   $('#toLogin').addEventListener('click', showLogin);
   $('#logout').addEventListener('click', doLogout);

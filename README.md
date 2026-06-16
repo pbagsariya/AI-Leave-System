@@ -62,13 +62,26 @@ stored in the `email_outbox` table — the demo works with zero setup. To send
 **real** email, set these env vars before running (Gmail example, using an
 [App Password](https://support.google.com/accounts/answer/185833)):
 
+**Easiest — a `.env` file** (loaded automatically on startup, no need to export
+each session): copy `.env.example` to `.env` and fill in the values:
+
 ```bash
-export SMTP_HOST=smtp.gmail.com
+cp .env.example .env     # then edit .env   (Windows: copy .env.example .env)
+```
+
+Or set them as environment variables instead:
+
+```bash
+export SMTP_HOST=smtp.gmail.com        # PowerShell: $env:SMTP_HOST="smtp.gmail.com"
 export SMTP_PORT=587
 export SMTP_USER=you@gmail.com
 export SMTP_PASS=your-16-char-app-password
-export SMTP_FROM=you@gmail.com        # optional
+export SMTP_FROM=you@gmail.com         # optional
 ```
+
+`.env` is gitignored, so credentials are never committed. On signup the new user
+gets a confirmation email; on apply/approve/reject the relevant people are
+notified.
 
 To actually receive the manager emails, the Manager account needs a real address
 — change the seeded ones in `backend/db.py` (`EMPLOYEES`) or sign up a Manager

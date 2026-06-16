@@ -9,6 +9,9 @@ env/
 # SQLite — generated and seeded at runtime
 leave.db
 
+# Local secrets (SMTP credentials etc.) — never commit
+.env
+
 # OS / editor
 .DS_Store
 Thumbs.db

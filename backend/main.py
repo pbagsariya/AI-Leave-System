@@ -32,6 +32,29 @@ from . import db
 from . import leave_logic as L
 from . import notify
 
+def _load_dotenv() -> None:
+    """Load KEY=VALUE pairs from a .env file at the repo root into the
+    environment (without overriding real env vars). Keeps SMTP_* config in one
+    place so you don't re-export it every session. No external dependency."""
+    path = os.path.join(os.path.dirname(__file__), "..", ".env")
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                key, val = key.strip(), val.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+    except Exception as exc:
+        print(f"[config] could not read .env: {exc}")
+
+
+_load_dotenv()
+
 app = FastAPI(title="Leave Assistant")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],

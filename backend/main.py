@@ -75,6 +75,13 @@ PENDING: dict[str, list[str]] = {}
 @app.on_event("startup")
 def _startup() -> None:
     db.init_db()
+    host = os.getenv("SMTP_HOST")
+    if host:
+        sender = os.getenv("SMTP_FROM") or os.getenv("SMTP_USER") or "?"
+        print(f"[email] REAL send enabled via {host}:{os.getenv('SMTP_PORT', '587')} (from {sender})")
+    else:
+        print("[email] DEMO mode - emails are logged to the console + email_outbox "
+              "(set SMTP_* in .env to send real email)")
 
 
 # ---- request models --------------------------------------------------------

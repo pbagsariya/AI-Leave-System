@@ -69,6 +69,9 @@ def init_db() -> None:
             c.execute("ALTER TABLE employees ADD COLUMN role TEXT DEFAULT 'Employee'")
         if "email" not in cols:
             c.execute("ALTER TABLE employees ADD COLUMN email TEXT")
+        lr_cols = [r["name"] for r in c.execute("PRAGMA table_info(leave_requests)")]
+        if "decision_comment" not in lr_cols:
+            c.execute("ALTER TABLE leave_requests ADD COLUMN decision_comment TEXT")
 
         # idempotent: ensure every demo employee, balance, and login exists.
         # INSERT OR IGNORE adds new users to an existing leave.db without
@@ -142,7 +145,9 @@ def _seed_history(c: sqlite3.Connection) -> None:
         for i, (rid, code, label, status) in enumerate(rows):
             ts = (base - dt.timedelta(days=i)).isoformat()
             c.execute(
-                "INSERT INTO leave_requests VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO leave_requests "
+                "(id, employee_id, code, label, start_date, end_date, duration_days, comments, status, created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (rid, eid, code, label, None, None, None, "", status, ts),
             )
 
@@ -243,7 +248,7 @@ def get_balances(employee_id: str) -> dict:
 def get_history(employee_id: str) -> list[dict]:
     with _conn() as c:
         rows = c.execute(
-            "SELECT id, code, label, status FROM leave_requests "
+            "SELECT id, code, label, status, decision_comment FROM leave_requests "
             "WHERE employee_id = ? ORDER BY created_at DESC",
             (employee_id,),
         ).fetchall()
@@ -301,7 +306,9 @@ def delete_draft(session_id: str) -> None:
 def insert_request(req: dict) -> None:
     with _conn() as c:
         c.execute(
-            "INSERT INTO leave_requests VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO leave_requests "
+            "(id, employee_id, code, label, start_date, end_date, duration_days, comments, status, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
             (
                 req["id"], req["employee_id"], req["code"], req["label"],
                 req.get("start_date"), req.get("end_date"), req.get("duration_days"),
@@ -335,6 +342,14 @@ def get_request(req_id: str) -> Optional[dict]:
 def set_request_status(req_id: str, status: str) -> None:
     with _conn() as c:
         c.execute("UPDATE leave_requests SET status = ? WHERE id = ?", (status, req_id))
+
+
+def set_decision(req_id: str, status: str, comment: str = "") -> None:
+    with _conn() as c:
+        c.execute(
+            "UPDATE leave_requests SET status = ?, decision_comment = ? WHERE id = ?",
+            (status, comment, req_id),
+        )
 
 
 def write_audit(employee_id: str, message: str, parsed: dict, validation: dict) -> None:

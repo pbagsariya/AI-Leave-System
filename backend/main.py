@@ -93,6 +93,7 @@ class ConfirmIn(BaseModel):
 
 class ReqIdIn(BaseModel):
     request_id: str
+    comment: str = ""
 
 
 # ---- auth ------------------------------------------------------------------
@@ -195,8 +196,9 @@ def approve(body: ReqIdIn, mgr: str = Depends(current_manager)):
     req = db.get_request(body.request_id)
     if not req or req["status"] != "Pending":
         return {"error": "Request is no longer pending"}
-    db.set_request_status(body.request_id, "Approved")
-    notify.notify_decision(db.get_employee(req["employee_id"]), body.request_id, "Approved")
+    comment = body.comment.strip()
+    db.set_decision(body.request_id, "Approved", comment)
+    notify.notify_decision(db.get_employee(req["employee_id"]), body.request_id, "Approved", comment)
     return {"ok": True, "request_id": body.request_id, "status": "Approved"}
 
 
@@ -205,11 +207,12 @@ def reject(body: ReqIdIn, mgr: str = Depends(current_manager)):
     req = db.get_request(body.request_id)
     if not req or req["status"] != "Pending":
         return {"error": "Request is no longer pending"}
-    db.set_request_status(body.request_id, "Rejected")
+    comment = body.comment.strip()
+    db.set_decision(body.request_id, "Rejected", comment)
     # give the days back to the requester (submission had deducted them)
     if req["code"] and req["duration_days"]:
         db.credit_balance(req["employee_id"], req["code"], req["duration_days"])
-    notify.notify_decision(db.get_employee(req["employee_id"]), body.request_id, "Rejected")
+    notify.notify_decision(db.get_employee(req["employee_id"]), body.request_id, "Rejected", comment)
     return {"ok": True, "request_id": body.request_id, "status": "Rejected"}
 
 

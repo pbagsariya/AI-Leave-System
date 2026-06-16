@@ -106,12 +106,14 @@ def notify_leave_submitted(employee: dict, managers: list[dict], req_id: str,
         )
 
 
-def notify_decision(employee: dict, req_id: str, decision: str) -> None:
+def notify_decision(employee: dict, req_id: str, decision: str, comment: str = "") -> None:
     """Email the requester that their leave was approved/rejected."""
-    send_email(
-        employee.get("email"),
-        f"Leave request {req_id} {decision.lower()}",
+    body = (
         f"Hi {employee['name']},\n\n"
         f"Your leave request {req_id} has been {decision.lower()} by your manager.\n"
-        + ("The days have been returned to your balance.\n" if decision == "Rejected" else ""),
     )
+    if comment:
+        body += f'\nManager\'s comment: "{comment}"\n'
+    if decision == "Rejected":
+        body += "The days have been returned to your balance.\n"
+    send_email(employee.get("email"), f"Leave request {req_id} {decision.lower()}", body)

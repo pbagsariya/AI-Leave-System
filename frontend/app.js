@@ -671,7 +671,10 @@ async function boot() {
   });
   $('#attach').addEventListener('click', () => setAttached(!state.attached));
   $('#chips').addEventListener('click', (ev) => {
-    const b = ev.target.closest('[data-fill]'); if (b) send(b.dataset.fill);
+    const fill = ev.target.closest('[data-fill]');
+    const prompt = ev.target.closest('[data-prompt]');
+    if (fill) send(fill.dataset.fill);                       // complete request → run it
+    else if (prompt) { bubbleBot(esc(prompt.dataset.prompt)); $('#input').focus(); }  // apply → ask the user
   });
 
   // approvals (event delegation)

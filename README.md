@@ -83,6 +83,19 @@ export SMTP_FROM=you@gmail.com         # optional
 gets a confirmation email; on apply/approve/reject the relevant people are
 notified.
 
+**Not receiving email? Diagnose it:**
+
+```bash
+python -m backend.test_email you@example.com
+```
+
+This prints whether SMTP is configured and tries a real send, showing the exact
+error if it fails. The running server also logs its mode on startup:
+`[email] REAL send enabled via …` (good) or `[email] DEMO mode …` (no SMTP, so
+nothing is delivered — set up `.env`). For Gmail the usual gotchas are: using
+your normal password instead of a 16-char **App Password**, **2-Step
+Verification** not enabled, or a network that blocks outbound port 587.
+
 To actually receive the manager emails, the Manager account needs a real address
 — change the seeded ones in `backend/db.py` (`EMPLOYEES`) or sign up a Manager
 with your own email.

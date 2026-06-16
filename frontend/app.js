@@ -606,6 +606,19 @@ async function doLogout() {
 async function boot() {
   $('#mockflag').style.display = USE_MOCK ? '' : 'none';
 
+  // show/hide password toggles
+  document.querySelectorAll('.pw-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const inp = document.getElementById(btn.dataset.target);
+      if (!inp) return;
+      const reveal = inp.type === 'password';
+      inp.type = reveal ? 'text' : 'password';
+      btn.querySelector('.eye-show').classList.toggle('hidden', reveal);
+      btn.querySelector('.eye-hide').classList.toggle('hidden', !reveal);
+      btn.setAttribute('aria-label', reveal ? 'Hide password' : 'Show password');
+    });
+  });
+
   // auth screens
   $('#loginForm').addEventListener('submit', doLogin);
   $('#signupForm').addEventListener('submit', doSignup);

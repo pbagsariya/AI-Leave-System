@@ -118,12 +118,14 @@ const mockApi = {
     return { error: 'Invalid username or password' };
   },
   async logout() { mockDB.current = null; },
-  async signup({ name, dept, email, username, password, role }) {
+  async signup({ name, dept, email, username, password, confirm_password, role }) {
     const u = (username || '').trim().toLowerCase();
-    if (!name || !u || !password) return { error: 'Name, username and password are required' };
-    if (password.length < 4) return { error: 'Password must be at least 4 characters' };
+    if (!name || !email || !dept || !u || !password) return { error: 'All fields are required' };
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: 'Please enter a valid email address' };
     if (u.includes(' ')) return { error: 'Username cannot contain spaces' };
-    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: 'Please enter a valid email address' };
+    if (u.length < 3) return { error: 'Username must be at least 3 characters' };
+    if (password.length < 4) return { error: 'Password must be at least 4 characters' };
+    if (password !== confirm_password) return { error: 'Passwords do not match' };
     if (mockDB.creds[u]) return { error: 'That username is already taken' };
     const id = 'u' + Math.random().toString(16).slice(2, 10);
     const emp = { id, name: name.trim(), dept: (dept || '—').trim(), email: (email || '').trim(), role: role === 'Manager' ? 'Manager' : 'Employee' };
@@ -559,10 +561,29 @@ async function doSignup(ev) {
   const err = $('#signupError');
   err.classList.add('hidden');
   const role = $('#suRole').value || 'Employee';
-  const body = {
-    name: $('#suName').value, dept: $('#suDept').value, email: $('#suEmail').value,
-    username: $('#suUsername').value, password: $('#suPassword').value, role,
-  };
+  const name = $('#suName').value.trim();
+  const email = $('#suEmail').value.trim();
+  const dept = $('#suDept').value.trim();
+  const username = $('#suUsername').value.trim();
+  const pw = $('#suPassword').value;
+  const cpw = $('#suConfirm').value;
+
+  // client-side validation (server re-checks authoritatively)
+  let msg = '';
+  if (!name) msg = 'Full name is required';
+  else if (!email) msg = 'Email is required';
+  else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) msg = 'Please enter a valid email address';
+  else if (!dept) msg = 'Department is required';
+  else if (!username) msg = 'Username is required';
+  else if (username.includes(' ')) msg = 'Username cannot contain spaces';
+  else if (username.length < 3) msg = 'Username must be at least 3 characters';
+  else if (!pw) msg = 'Password is required';
+  else if (pw.length < 4) msg = 'Password must be at least 4 characters';
+  else if (!cpw) msg = 'Please confirm your password';
+  else if (pw !== cpw) msg = 'Passwords do not match';
+  if (msg) { err.textContent = msg; err.classList.remove('hidden'); return; }
+
+  const body = { name, dept, email, username, password: pw, confirm_password: cpw, role };
   btn.disabled = true; btn.textContent = 'Creating…';
   try {
     const res = await api.signup(body);

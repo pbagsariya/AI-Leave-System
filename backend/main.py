@@ -62,11 +62,12 @@ class LoginIn(BaseModel):
 
 
 class SignupIn(BaseModel):
-    name: str
+    name: str = ""
     dept: str = ""
     email: str = ""
-    username: str
-    password: str
+    username: str = ""
+    password: str = ""
+    confirm_password: str = ""
     role: str = "Employee"
 
 
@@ -101,23 +102,43 @@ def _start_session(emp: str, response: Response) -> dict:
     return db.get_employee(emp)
 
 
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
 @app.post("/api/signup")
 def signup(body: SignupIn, response: Response):
     name = body.name.strip()
+    email = body.email.strip()
+    dept = body.dept.strip()
     username = body.username.strip()
-    if not name or not username or not body.password:
-        raise HTTPException(status_code=400, detail="Name, username and password are required")
-    if len(body.password) < 4:
-        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+    pw = body.password
+    cpw = body.confirm_password
+
+    if not name:
+        raise HTTPException(status_code=400, detail="Full name is required")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    if not EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="Please enter a valid email address")
+    if not dept:
+        raise HTTPException(status_code=400, detail="Department is required")
+    if not username:
+        raise HTTPException(status_code=400, detail="Username is required")
     if " " in username:
         raise HTTPException(status_code=400, detail="Username cannot contain spaces")
-    email = body.email.strip()
-    if email and ("@" not in email or "." not in email.split("@")[-1]):
-        raise HTTPException(status_code=400, detail="Please enter a valid email address")
+    if len(username) < 3:
+        raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
+    if not pw:
+        raise HTTPException(status_code=400, detail="Password is required")
+    if len(pw) < 4:
+        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+    if pw != cpw:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
     if db.username_exists(username):
         raise HTTPException(status_code=409, detail="That username is already taken")
+
     role = "Manager" if body.role == "Manager" else "Employee"
-    emp = db.create_account(username, body.password, name, body.dept, role, email)
+    emp = db.create_account(username, pw, name, dept, role, email)
     return _start_session(emp, response)  # auto-login after signup
 
 

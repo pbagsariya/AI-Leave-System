@@ -71,21 +71,21 @@
         </div>
       </div>
 
-      <form id="signupForm" class="space-y-3">
+      <form id="signupForm" class="space-y-3" novalidate>
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">Full name</label>
-          <input id="suName" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+          <label class="block text-xs font-medium text-slate-500 mb-1">Full name <span class="text-rose-500">*</span></label>
+          <input id="suName" type="text" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">Email</label>
-          <input id="suEmail" type="email" autocomplete="email" placeholder="you@company.com" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+          <label class="block text-xs font-medium text-slate-500 mb-1">Email <span class="text-rose-500">*</span></label>
+          <input id="suEmail" type="email" required autocomplete="email" placeholder="you@company.com" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">Department</label>
-          <input id="suDept" type="text" placeholder="e.g. Engineering" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+          <label class="block text-xs font-medium text-slate-500 mb-1">Department <span class="text-rose-500">*</span></label>
+          <input id="suDept" type="text" required placeholder="e.g. Engineering" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">Role</label>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Role <span class="text-rose-500">*</span></label>
           <div class="relative">
             <select id="suRole" class="w-full appearance-none border border-slate-200 rounded-lg pl-3 pr-9 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30">
               <option value="Employee">Employee</option>
@@ -95,12 +95,16 @@
           </div>
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">Username</label>
-          <input id="suUsername" type="text" autocomplete="username" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+          <label class="block text-xs font-medium text-slate-500 mb-1">Username <span class="text-rose-500">*</span></label>
+          <input id="suUsername" type="text" required autocomplete="username" placeholder="at least 3 characters, no spaces" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">Password</label>
-          <input id="suPassword" type="password" autocomplete="new-password" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+          <label class="block text-xs font-medium text-slate-500 mb-1">Password <span class="text-rose-500">*</span></label>
+          <input id="suPassword" type="password" required autocomplete="new-password" placeholder="at least 4 characters" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Confirm password <span class="text-rose-500">*</span></label>
+          <input id="suConfirm" type="password" required autocomplete="new-password" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
         </div>
         <p id="signupError" class="text-xs text-rose-600 hidden"></p>
         <button type="submit" id="signupBtn" class="btn-primary w-full h-10 mt-1">Create account</button>

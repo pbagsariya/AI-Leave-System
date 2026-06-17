@@ -91,6 +91,18 @@ def init_db() -> None:
             # authoritative: keep seeded passwords/ids in sync even if they change
             c.execute("INSERT OR REPLACE INTO credentials (username, password_hash, employee_id) VALUES (?,?,?)",
                       (username, _hash(pw), eid))
+
+        # remove leftover seed accounts from earlier rosters so cruft can't
+        # accumulate. Seed rows have ids like 'e1'/'e2'; signed-up users are
+        # 'u<hex>' and are never matched, so they're preserved.
+        keep_users = [c0 for c0, _, _ in CREDS]
+        keep_ids = [e0 for e0, *_ in EMPLOYEES]
+        ph_u = ",".join("?" * len(keep_users))
+        ph_i = ",".join("?" * len(keep_ids))
+        c.execute(f"DELETE FROM credentials WHERE employee_id GLOB 'e[0-9]*' AND username NOT IN ({ph_u})", keep_users)
+        c.execute(f"DELETE FROM balances   WHERE employee_id GLOB 'e[0-9]*' AND employee_id NOT IN ({ph_i})", keep_ids)
+        c.execute(f"DELETE FROM employees  WHERE id GLOB 'e[0-9]*' AND id NOT IN ({ph_i})", keep_ids)
+
         # sample request history only on a brand-new database
         if c.execute("SELECT COUNT(*) FROM leave_requests").fetchone()[0] == 0:
             _seed_history(c)

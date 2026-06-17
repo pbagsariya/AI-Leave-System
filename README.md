@@ -30,13 +30,19 @@ uvicorn backend.main:app --reload     # run from the repo root
 ### Logging in
 Opening the app shows a **login screen**. Demo accounts (seeded into `leave.db`):
 
-| Username  | Password     | Employee                       |
+| Username  | Password     | Role · Department              |
 |-----------|--------------|--------------------------------|
-| `asha`    | `asha123`    | Asha Menon (Engineering)       |
-| `ravi`    | `ravi123`    | Ravi Kapoor (Sales)            |
-| `meera`   | `meera123`   | Meera Iyer (Design)            |
-| `prakash` | `prakash123` | Prakash Bagsariya (Developer)  |
-| `krupal`  | `krupal123`  | Krupal Tasare (Engineer)       |
+| `asha`    | `asha123`    | **Manager** · Engineering      |
+| `ravi`    | `ravi123`    | **Manager** · Sales            |
+| `meera`   | `meera123`   | Employee · Engineering         |
+| `prakash` | `prakash123` | Employee · Sales               |
+| `krupal`  | `krupal123`  | Employee · Engineering         |
+
+Approvals route **by department**: a leave request goes to the manager(s) in the
+requester's department. So Krupal/Meera (Engineering) → **Asha**, and Prakash
+(Sales) → **Ravi**. A manager only sees and can act on their own department's
+requests (acting on another department's request is rejected). New signups pick
+a department on the form, which determines their approver.
 
 Sign-in creates a server session (HTTP-only cookie); the backend derives your
 identity from it, so you only see and act on your own leave. **Logout** clears

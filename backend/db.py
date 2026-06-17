@@ -82,8 +82,9 @@ def init_db() -> None:
         for eid, name, dept, role, email in EMPLOYEES:
             c.execute("INSERT OR IGNORE INTO employees (id, name, dept, timezone, role, email) VALUES (?,?,?,?,?,?)",
                       (eid, name, dept, "Asia/Kolkata", role, email))
-            # keep the seeded role/email authoritative even on an older leave.db
-            c.execute("UPDATE employees SET role = ?, email = ? WHERE id = ?", (role, email, eid))
+            # keep the seeded dept/role/email authoritative even on an older leave.db
+            c.execute("UPDATE employees SET dept = ?, role = ?, email = ? WHERE id = ?",
+                      (dept, role, email, eid))
             for code, days in BALANCES[eid].items():
                 c.execute("INSERT OR IGNORE INTO balances VALUES (?,?,?)", (eid, code, days))
         for username, pw, eid in CREDS:
@@ -108,12 +109,15 @@ def _hash(password: str) -> str:
 # Demo roster (id, name, dept, role, email). Usernames are stored lowercase;
 # verify_login() lowercases input. Emails are placeholders — change them (or
 # sign up with a real address) to receive real notifications via SMTP.
+# Leave approvals route by DEPARTMENT: an employee's request goes to the
+# manager(s) in the same department. Two departments are seeded so this is
+# demonstrable — Engineering (mgr Asha) and Sales (mgr Ravi).
 EMPLOYEES = [
     ("e1", "Asha Menon", "Engineering", "Manager", "asha@example.com"),
-    ("e2", "Ravi Kapoor", "Sales", "Employee", "ravi@example.com"),
-    ("e3", "Meera Iyer", "Design", "Employee", "meera@example.com"),
-    ("e4", "Prakash Bagsariya", "Developer", "Employee", "prakash@example.com"),
-    ("e5", "Krupal Tasare", "Engineer", "Employee", "krupal@example.com"),
+    ("e2", "Ravi Kapoor", "Sales", "Manager", "ravi@example.com"),
+    ("e3", "Meera Iyer", "Engineering", "Employee", "meera@example.com"),
+    ("e4", "Prakash Bagsariya", "Sales", "Employee", "prakash@example.com"),
+    ("e5", "Krupal Tasare", "Engineering", "Employee", "krupal@example.com"),
 ]
 
 # Starting allotment granted to a freshly signed-up account.
@@ -173,6 +177,28 @@ def get_managers() -> list[dict]:
     with _conn() as c:
         rows = c.execute("SELECT id, name, email FROM employees WHERE role = 'Manager'").fetchall()
     return [dict(r) for r in rows]
+
+
+def get_managers_for_employee(employee_id: str) -> list[dict]:
+    """Managers in the same department as the employee (their approvers)."""
+    with _conn() as c:
+        erow = c.execute("SELECT dept FROM employees WHERE id = ?", (employee_id,)).fetchone()
+        dept = erow["dept"] if erow else None
+        rows = c.execute(
+            "SELECT id, name, email FROM employees "
+            "WHERE role = 'Manager' AND dept = ? AND id != ?",
+            (dept, employee_id),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def same_department(emp_a: str, emp_b: str) -> bool:
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT dept FROM employees WHERE id IN (?, ?)", (emp_a, emp_b)
+        ).fetchall()
+    depts = {r["dept"] for r in rows}
+    return len(rows) == 2 and len(depts) == 1
 
 
 def log_email(to_email: str, subject: str, body: str, status: str) -> None:
@@ -328,22 +354,20 @@ def get_overlapping_request(employee_id: str, start_date: str, end_date: str) ->
     return dict(row) if row else None
 
 
-def get_pending_requests(exclude_employee: Optional[str] = None) -> list[dict]:
-    """All pending leave requests joined with the requester, newest first.
-    Optionally excludes one employee (so a manager doesn't approve their own)."""
-    q = (
-        "SELECT r.id, r.employee_id, e.name AS employee_name, e.dept AS dept, "
-        "       r.code, r.label, r.duration_days, r.created_at "
-        "FROM leave_requests r JOIN employees e ON e.id = r.employee_id "
-        "WHERE r.status = 'Pending'"
-    )
-    params: list = []
-    if exclude_employee:
-        q += " AND r.employee_id != ?"
-        params.append(exclude_employee)
-    q += " ORDER BY r.created_at DESC"
+def get_pending_requests(manager_id: str) -> list[dict]:
+    """Pending leave requests this manager can act on: those from employees in
+    the manager's own department (excluding the manager), newest first."""
     with _conn() as c:
-        rows = c.execute(q, params).fetchall()
+        mrow = c.execute("SELECT dept FROM employees WHERE id = ?", (manager_id,)).fetchone()
+        dept = mrow["dept"] if mrow else None
+        rows = c.execute(
+            "SELECT r.id, r.employee_id, e.name AS employee_name, e.dept AS dept, "
+            "       r.code, r.label, r.duration_days, r.created_at "
+            "FROM leave_requests r JOIN employees e ON e.id = r.employee_id "
+            "WHERE r.status = 'Pending' AND e.dept = ? AND r.employee_id != ? "
+            "ORDER BY r.created_at DESC",
+            (dept, manager_id),
+        ).fetchall()
     return [dict(r) for r in rows]
 
 

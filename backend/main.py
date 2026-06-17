@@ -240,14 +240,24 @@ def current_manager(emp: str = Depends(current_emp)) -> str:
 @app.get("/api/approvals")
 def approvals(mgr: str = Depends(current_manager)):
     _sweep_auto_approvals()
-    return db.get_pending_requests(exclude_employee=mgr)
+    return db.get_pending_requests(mgr)
+
+
+def _can_manage(mgr: str, req: dict | None):
+    """A manager may only act on requests from their own department."""
+    if not req or req["status"] != "Pending":
+        return {"error": "Request is no longer pending"}
+    if not db.same_department(mgr, req["employee_id"]):
+        raise HTTPException(status_code=403, detail="That request belongs to another department")
+    return None
 
 
 @app.post("/api/approve")
 def approve(body: ReqIdIn, mgr: str = Depends(current_manager)):
     req = db.get_request(body.request_id)
-    if not req or req["status"] != "Pending":
-        return {"error": "Request is no longer pending"}
+    blocked = _can_manage(mgr, req)
+    if blocked:
+        return blocked
     comment = body.comment.strip()
     db.set_decision(body.request_id, "Approved", comment)
     notify.notify_decision(db.get_employee(req["employee_id"]), body.request_id, "Approved", comment)
@@ -257,8 +267,9 @@ def approve(body: ReqIdIn, mgr: str = Depends(current_manager)):
 @app.post("/api/reject")
 def reject(body: ReqIdIn, mgr: str = Depends(current_manager)):
     req = db.get_request(body.request_id)
-    if not req or req["status"] != "Pending":
-        return {"error": "Request is no longer pending"}
+    blocked = _can_manage(mgr, req)
+    if blocked:
+        return blocked
     comment = body.comment.strip()
     db.set_decision(body.request_id, "Rejected", comment)
     # give the days back to the requester (submission had deducted them)
@@ -464,8 +475,8 @@ def confirm(body: ConfirmIn, emp: str = Depends(current_emp)):
     })
     db.delete_draft(body.session_id)
 
-    # notify the requester (confirmation) and the managers (action needed)
-    notify.notify_leave_submitted(db.get_employee(emp), db.get_managers(), req_id, label, rng)
+    # notify the requester (confirmation) and their department's manager(s)
+    notify.notify_leave_submitted(db.get_employee(emp), db.get_managers_for_employee(emp), req_id, label, rng)
 
     return {"request_id": req_id, "status": "Pending", "balances": db.get_balances(emp), "notified": True}
 

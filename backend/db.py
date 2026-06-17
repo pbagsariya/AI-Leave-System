@@ -115,11 +115,10 @@ def _hash(password: str) -> str:
 #   Team 1 — pmanager1 (mgr); Meera, pemployee1
 #   Team 2 — pmanager2 (mgr); pemployee2
 EMPLOYEES = [
-    ("e1", "pmanager1", "Team 1", "Manager", "prakashatinfo@gmail.com"),
-    ("e2", "pmanager2", "Team 2", "Manager", "prakash.bagsariya@gmail.com"),
-    ("e3", "Meera Iyer", "Team 1", "Employee", "meera@example.com"),
-    ("e4", "pemployee1", "Team 1", "Employee", "prpri2007@gmail.com"),
-    ("e5", "pemployee2", "Team 2", "Employee", "bagsariya.prakash@gmail.com"),
+    ("e1", "pmanager1", "IT", "Manager", "prakashatinfo@gmail.com"),
+    ("e2", "pmanager2", "R&D", "Manager", "prakash.bagsariya@gmail.com"),
+    ("e3", "pemployee1", "IT", "Employee", "prpri2007@gmail.com"),
+    ("e4", "pemployee2", "R&D", "Employee", "bagsariya.prakash@gmail.com"),
 ]
 
 # Starting allotment granted to a freshly signed-up account.
@@ -134,9 +133,8 @@ BALANCES = {
 CREDS = [
     ("pmanager1", "pmanager123", "e1"),
     ("pmanager2", "pmanager456", "e2"),
-    ("meera", "meera123", "e3"),
-    ("pemployee1", "prakash123", "e4"),
-    ("pemployee2", "pemployee456", "e5"),
+    ("pemployee1", "pemployee123", "e3"),
+    ("pemployee2", "pemployee456", "e4"),
 ]
 
 

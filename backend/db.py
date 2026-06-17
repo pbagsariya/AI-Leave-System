@@ -88,7 +88,9 @@ def init_db() -> None:
             for code, days in BALANCES[eid].items():
                 c.execute("INSERT OR IGNORE INTO balances VALUES (?,?,?)", (eid, code, days))
         for username, pw, eid in CREDS:
-            c.execute("INSERT OR IGNORE INTO credentials VALUES (?,?,?)", (username, _hash(pw), eid))
+            # authoritative: keep seeded passwords/ids in sync even if they change
+            c.execute("INSERT OR REPLACE INTO credentials (username, password_hash, employee_id) VALUES (?,?,?)",
+                      (username, _hash(pw), eid))
         # sample request history only on a brand-new database
         if c.execute("SELECT COUNT(*) FROM leave_requests").fetchone()[0] == 0:
             _seed_history(c)

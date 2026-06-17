@@ -82,9 +82,9 @@ def init_db() -> None:
         for eid, name, dept, role, email in EMPLOYEES:
             c.execute("INSERT OR IGNORE INTO employees (id, name, dept, timezone, role, email) VALUES (?,?,?,?,?,?)",
                       (eid, name, dept, "Asia/Kolkata", role, email))
-            # keep the seeded dept/role/email authoritative even on an older leave.db
-            c.execute("UPDATE employees SET dept = ?, role = ?, email = ? WHERE id = ?",
-                      (dept, role, email, eid))
+            # keep the seeded name/dept/role/email authoritative even on an older leave.db
+            c.execute("UPDATE employees SET name = ?, dept = ?, role = ?, email = ? WHERE id = ?",
+                      (name, dept, role, email, eid))
             for code, days in BALANCES[eid].items():
                 c.execute("INSERT OR IGNORE INTO balances VALUES (?,?,?)", (eid, code, days))
         for username, pw, eid in CREDS:

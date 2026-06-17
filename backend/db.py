@@ -113,11 +113,11 @@ def _hash(password: str) -> str:
 # manager(s) in the same department. Two departments are seeded so this is
 # demonstrable — Engineering (mgr Asha) and Sales (mgr Ravi).
 EMPLOYEES = [
-    ("e1", "Asha Menon", "Engineering", "Manager", "asha@example.com"),
-    ("e2", "Ravi Kapoor", "Sales", "Manager", "ravi@example.com"),
-    ("e3", "Meera Iyer", "Engineering", "Employee", "meera@example.com"),
-    ("e4", "Prakash Bagsariya", "Sales", "Employee", "prakash@example.com"),
-    ("e5", "Krupal Tasare", "Engineering", "Employee", "krupal@example.com"),
+    ("e1", "pmanager1", "ING Home Manager1", "Manager1", "prakashatinfo@gmail.com"),
+    ("e2", "pmanager2", "ING Home Manager2", "Manager2", "prakash.bagsariya@gmail.com"),
+    ("e3", "Meera Iyer", "Developer", "Employee", "meera@example.com"),
+    ("e4", "pemployee1", "Lead Developer", "Employee1", "prpri2007@gmail.com"),
+    ("e5", "pemployee2", "Sr. Developer", "Employee2", "bagsariya.prakash@gmail.com"),
 ]
 
 # Starting allotment granted to a freshly signed-up account.
@@ -130,11 +130,11 @@ BALANCES = {
     "e5": {"SICK": 9, "CASUAL": 5, "EARNED": 11, "COMP_OFF": 3},
 }
 CREDS = [
-    ("asha", "asha123", "e1"),
-    ("ravi", "ravi123", "e2"),
+    ("pmanager1", "pmanager123", "e1"),
+    ("pmanager2", "pmanager456", "e2"),
     ("meera", "meera123", "e3"),
-    ("prakash", "prakash123", "e4"),
-    ("krupal", "krupal123", "e5"),
+    ("pemployee1", "prakash123", "e4"),
+    ("pemployee2", "pemployee456", "e5"),
 ]
 
 

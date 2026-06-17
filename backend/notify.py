@@ -68,6 +68,18 @@ def send_email(to_email: str | None, subject: str, body: str) -> None:
 
 # ---- message builders ------------------------------------------------------
 
+def notify_password_reset(employee: dict, reset_url: str) -> None:
+    """Email a password-reset link."""
+    send_email(
+        employee.get("email"),
+        "Reset your Leave Assistant password",
+        f"Hi {employee['name']},\n\n"
+        f"We received a request to reset your password. Open the link below to "
+        f"choose a new one (valid for 1 hour):\n\n{reset_url}\n\n"
+        f"If you didn't request this, you can safely ignore this email.\n",
+    )
+
+
 def notify_registration(employee: dict) -> None:
     """Welcome / confirmation email when an account is created."""
     send_email(

@@ -47,6 +47,12 @@ not production-hardened; change the seeded logins there for anything real.
 register as an **Employee** or **Manager** (pick the role on the form); the
 account is created with a starting balance and you're signed straight in.
 
+**Forgot / reset password** — the login screen also has a *Forgot password?*
+link. Enter a username or email and the app emails a **single-use, 1-hour**
+reset link; opening it (`/?reset=<token>`) shows a page to set a new password.
+With email configured the link is delivered; otherwise it's logged to the
+server console / outbox.
+
 **Manager approvals** — a Manager sees a **Pending approvals** panel listing
 every *other* employee's pending request, with **Approve** / **Reject** buttons.
 Approving marks the request Approved; rejecting marks it Rejected and returns the

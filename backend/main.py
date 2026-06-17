@@ -23,7 +23,7 @@ import secrets
 import time
 from zoneinfo import ZoneInfo
 
-from fastapi import Cookie, Depends, FastAPI, HTTPException, Response
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -91,6 +91,16 @@ class SignupIn(BaseModel):
     password: str = ""
     confirm_password: str = ""
     role: str = "Employee"
+
+
+class ForgotIn(BaseModel):
+    identifier: str = ""
+
+
+class ResetIn(BaseModel):
+    token: str = ""
+    password: str = ""
+    confirm_password: str = ""
 
 
 class ChatIn(BaseModel):
@@ -186,6 +196,35 @@ def logout(response: Response, session: str | None = Cookie(default=None)):
 @app.get("/api/me")
 def me(emp: str = Depends(current_emp)):
     return db.get_employee(emp)
+
+
+@app.post("/api/forgot-password")
+def forgot_password(body: ForgotIn, request: Request):
+    ident = body.identifier.strip()
+    if ident:
+        acct = db.account_for_reset(ident)
+        if acct and acct.get("email"):
+            token = db.create_reset_token(acct["id"])
+            reset_url = str(request.base_url).rstrip("/") + "/?reset=" + token
+            notify.notify_password_reset(acct, reset_url)
+    # always succeed — don't reveal whether the account/email exists
+    return {"ok": True}
+
+
+@app.post("/api/reset-password")
+def reset_password(body: ResetIn):
+    emp = db.reset_token_employee(body.token)
+    if not emp:
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has expired.")
+    if not body.password:
+        raise HTTPException(status_code=400, detail="Password is required")
+    if len(body.password) < 4:
+        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+    if body.password != body.confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+    db.update_password(emp, body.password)
+    db.delete_reset_token(body.token)
+    return {"ok": True}
 
 
 def current_manager(emp: str = Depends(current_emp)) -> str:

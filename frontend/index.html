@@ -56,7 +56,8 @@
         <button type="submit" id="loginBtn" class="btn-primary w-full h-10 mt-1">Sign in</button>
       </form>
 
-      <button id="toSignup" type="button" class="w-full text-center text-xs text-brand-600 hover:underline mt-4">Create a new account</button>
+      <button id="toForgot" type="button" class="w-full text-center text-xs text-slate-400 hover:text-brand-600 hover:underline mt-3">Forgot password?</button>
+      <button id="toSignup" type="button" class="w-full text-center text-xs text-brand-600 hover:underline mt-2">Create a new account</button>
     </div>
   </div>
 
@@ -124,6 +125,69 @@
       </form>
 
       <button id="toLogin" type="button" class="w-full text-center text-xs text-brand-600 hover:underline mt-4">Already have an account? Sign in</button>
+    </div>
+  </div>
+
+  <!-- ───────────── Forgot password ───────────── -->
+  <div id="forgot" class="hidden min-h-screen grid place-items-center px-4">
+    <div class="w-full max-w-sm bg-white rounded-2xl border border-slate-200 shadow-sm p-7">
+      <div class="flex items-center gap-2.5 mb-6">
+        <div class="w-10 h-10 rounded-lg bg-brand-500 text-white grid place-items-center font-bold text-lg">L</div>
+        <div>
+          <h1 class="text-base font-semibold leading-tight">Reset password</h1>
+          <p class="text-[11px] text-slate-400 leading-tight">We'll email you a reset link</p>
+        </div>
+      </div>
+      <form id="forgotForm" class="space-y-3" novalidate>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Username or email</label>
+          <input id="fpIdentifier" type="text" required autocomplete="username" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+        </div>
+        <p id="forgotError" class="text-xs text-rose-600 hidden"></p>
+        <p id="forgotMsg" class="text-xs text-emerald-600 hidden"></p>
+        <button type="submit" id="forgotBtn" class="btn-primary w-full h-10 mt-1">Send reset link</button>
+      </form>
+      <button id="forgotToLogin" type="button" class="w-full text-center text-xs text-brand-600 hover:underline mt-4">Back to sign in</button>
+    </div>
+  </div>
+
+  <!-- ───────────── Set new password (from email link) ───────────── -->
+  <div id="reset" class="hidden min-h-screen grid place-items-center px-4">
+    <div class="w-full max-w-sm bg-white rounded-2xl border border-slate-200 shadow-sm p-7">
+      <div class="flex items-center gap-2.5 mb-6">
+        <div class="w-10 h-10 rounded-lg bg-brand-500 text-white grid place-items-center font-bold text-lg">L</div>
+        <div>
+          <h1 class="text-base font-semibold leading-tight">Choose a new password</h1>
+          <p class="text-[11px] text-slate-400 leading-tight">Enter and confirm your new password</p>
+        </div>
+      </div>
+      <form id="resetForm" class="space-y-3" novalidate>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">New password <span class="text-rose-500">*</span></label>
+          <div class="relative">
+            <input id="rpPassword" type="password" required autocomplete="new-password" placeholder="at least 4 characters" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+            <button type="button" class="pw-toggle" data-target="rpPassword" aria-label="Show password">
+              <svg class="eye-show w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+              <svg class="eye-hide w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
+            </button>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Confirm new password <span class="text-rose-500">*</span></label>
+          <div class="relative">
+            <input id="rpConfirm" type="password" required autocomplete="new-password" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+            <button type="button" class="pw-toggle" data-target="rpConfirm" aria-label="Show password">
+              <svg class="eye-show w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+              <svg class="eye-hide w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
+            </button>
+          </div>
+          <p id="rpMatch" class="text-[11px] mt-1 hidden"></p>
+        </div>
+        <p id="resetError" class="text-xs text-rose-600 hidden"></p>
+        <p id="resetMsg" class="text-xs text-emerald-600 hidden"></p>
+        <button type="submit" id="resetBtn" class="btn-primary w-full h-10 mt-1">Reset password</button>
+      </form>
+      <button id="resetToLogin" type="button" class="w-full text-center text-xs text-brand-600 hover:underline mt-4">Back to sign in</button>
     </div>
   </div>
 
@@ -203,6 +267,6 @@
 
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>

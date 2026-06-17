@@ -60,6 +60,7 @@ const mockDB = {
     meera: { pw: 'meera123', id: 'e3' }, prakash: { pw: 'prakash123', id: 'e4' },
     krupal: { pw: 'krupal123', id: 'e5' },
   },
+  resets: {}, // reset token -> employee id (mock)
 };
 
 const DOC_REQUIRED_OVER = { SICK: 2 };
@@ -118,6 +119,28 @@ const mockApi = {
     return { error: 'Invalid username or password' };
   },
   async logout() { mockDB.current = null; },
+  async forgotPassword({ identifier }) {
+    const id = (identifier || '').trim().toLowerCase();
+    for (const [u, c] of Object.entries(mockDB.creds)) {
+      const emp = mockDB.employees.find(e => e.id === c.id);
+      if (u === id || (emp && (emp.email || '').toLowerCase() === id)) {
+        const token = 'tok' + Math.random().toString(16).slice(2, 12);
+        mockDB.resets[token] = c.id;
+        console.log('[mock] reset link: ' + location.pathname + '?reset=' + token);
+        break;
+      }
+    }
+    return { ok: true };   // always succeed (don't reveal existence)
+  },
+  async resetPassword({ token, password, confirm_password }) {
+    const id = mockDB.resets[token];
+    if (!id) return { error: 'This reset link is invalid or has expired.' };
+    if (!password || password.length < 4) return { error: 'Password must be at least 4 characters' };
+    if (password !== confirm_password) return { error: 'Passwords do not match' };
+    for (const c of Object.values(mockDB.creds)) if (c.id === id) c.pw = password;
+    delete mockDB.resets[token];
+    return { ok: true };
+  },
   async signup({ name, dept, email, username, password, confirm_password, role }) {
     const u = (username || '').trim().toLowerCase();
     if (!name || !email || !dept || !u || !password) return { error: 'All fields are required' };
@@ -293,6 +316,13 @@ const realApi = {
     if (r.ok) return r.json();
     const d = await r.json().catch(() => ({}));
     return { error: d.detail || 'Could not create account' };
+  },
+  async forgotPassword(body) { return (await postJSON('/api/forgot-password', body)).json(); },
+  async resetPassword(body) {
+    const r = await postJSON('/api/reset-password', body);
+    if (r.ok) return r.json();
+    const d = await r.json().catch(() => ({}));
+    return { error: d.detail || 'Could not reset password' };
   },
 
   async balances() { return (await fetch('/api/balances')).json(); },
@@ -520,6 +550,31 @@ function setAttached(on) {
 function hideAuthViews() {
   $('#login').classList.add('hidden');
   $('#signup').classList.add('hidden');
+  $('#forgot').classList.add('hidden');
+  $('#reset').classList.add('hidden');
+}
+
+function showForgot() {
+  $('#app').classList.add('hidden');
+  hideAuthViews();
+  $('#forgot').classList.remove('hidden');
+  $('#fpIdentifier').value = '';
+  $('#forgotError').classList.add('hidden');
+  $('#forgotMsg').classList.add('hidden');
+  $('#fpIdentifier').focus();
+}
+
+function showReset(token) {
+  state.resetToken = token;
+  $('#app').classList.add('hidden');
+  hideAuthViews();
+  $('#reset').classList.remove('hidden');
+  $('#rpPassword').value = '';
+  $('#rpConfirm').value = '';
+  $('#resetError').classList.add('hidden');
+  $('#resetMsg').classList.add('hidden');
+  $('#rpMatch').classList.add('hidden');
+  $('#rpPassword').focus();
 }
 
 function showLogin() {
@@ -649,6 +704,60 @@ async function doSignup(ev) {
   }
 }
 
+async function doForgot(ev) {
+  ev.preventDefault();
+  const btn = $('#forgotBtn'), err = $('#forgotError'), msg = $('#forgotMsg');
+  err.classList.add('hidden'); msg.classList.add('hidden');
+  const identifier = $('#fpIdentifier').value.trim();
+  if (!identifier) { err.textContent = 'Please enter your username or email'; err.classList.remove('hidden'); return; }
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    await api.forgotPassword({ identifier });
+    msg.textContent = 'If an account matches, a password-reset link has been emailed to it.';
+    msg.classList.remove('hidden');
+  } catch (e) {
+    err.textContent = 'Something went wrong. Please try again.'; err.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Send reset link';
+  }
+}
+
+function checkResetMatch() {
+  const pw = $('#rpPassword').value, cpw = $('#rpConfirm').value, el = $('#rpMatch');
+  if (!cpw) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  if (pw === cpw) { el.textContent = '✓ Passwords match'; el.className = 'text-[11px] mt-1 text-emerald-600'; }
+  else { el.textContent = '✗ Passwords do not match'; el.className = 'text-[11px] mt-1 text-rose-600'; }
+}
+
+async function doReset(ev) {
+  ev.preventDefault();
+  const btn = $('#resetBtn'), err = $('#resetError'), msg = $('#resetMsg');
+  err.classList.add('hidden'); msg.classList.add('hidden');
+  const pw = $('#rpPassword').value, cpw = $('#rpConfirm').value;
+  let m = '';
+  if (!pw) m = 'Password is required';
+  else if (pw.length < 4) m = 'Password must be at least 4 characters';
+  else if (pw !== cpw) m = 'Passwords do not match';
+  if (m) { err.textContent = m; err.classList.remove('hidden'); return; }
+  btn.disabled = true; btn.textContent = 'Resetting…';
+  try {
+    const res = await api.resetPassword({ token: state.resetToken, password: pw, confirm_password: cpw });
+    if (res && !res.error) {
+      history.replaceState(null, '', location.pathname);   // drop ?reset= from the URL
+      msg.textContent = 'Password reset! Redirecting to sign in…';
+      msg.classList.remove('hidden');
+      setTimeout(showLogin, 1400);
+    } else {
+      err.textContent = res.error || 'Could not reset password'; err.classList.remove('hidden');
+    }
+  } catch (e) {
+    err.textContent = 'Could not reset password. Please try again.'; err.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Reset password';
+  }
+}
+
 async function doLogout() {
   await api.logout();
   setAttached(false);
@@ -680,6 +789,15 @@ async function boot() {
   $('#toSignup').addEventListener('click', showSignup);
   $('#toLogin').addEventListener('click', showLogin);
   $('#logout').addEventListener('click', doLogout);
+
+  // password reset
+  $('#toForgot').addEventListener('click', showForgot);
+  $('#forgotToLogin').addEventListener('click', showLogin);
+  $('#forgotForm').addEventListener('submit', doForgot);
+  $('#resetToLogin').addEventListener('click', () => { history.replaceState(null, '', location.pathname); showLogin(); });
+  $('#resetForm').addEventListener('submit', doReset);
+  $('#rpPassword').addEventListener('input', checkResetMatch);
+  $('#rpConfirm').addEventListener('input', checkResetMatch);
 
   // composer
   $('#send').addEventListener('click', () => send($('#input').value));
@@ -733,6 +851,10 @@ async function boot() {
     else if (act === 'cancel') { card.remove(); bubbleBot('No problem — cancelled. Nothing was submitted.'); }
     else if (act === 'edit') { $('#input').focus(); bubbleBot('Sure — tell me what to change (dates, type, or duration).'); }
   });
+
+  // password-reset link from email (?reset=token) takes priority
+  const resetToken = new URLSearchParams(location.search).get('reset');
+  if (resetToken) { showReset(resetToken); return; }
 
   // resume an existing session or show login
   const user = await api.me();

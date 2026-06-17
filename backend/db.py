@@ -61,6 +61,9 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT, to_email TEXT, subject TEXT,
                 body TEXT, status TEXT, created_at TEXT
             );
+            CREATE TABLE IF NOT EXISTS password_resets (
+                token TEXT PRIMARY KEY, employee_id TEXT, created_at TEXT
+            );
             """
         )
         # migrate an older leave.db that predates the role / email columns
@@ -235,6 +238,60 @@ def session_employee(token: str) -> Optional[str]:
 def delete_session(token: str) -> None:
     with _conn() as c:
         c.execute("DELETE FROM auth_sessions WHERE token = ?", (token,))
+
+
+# ---- password reset --------------------------------------------------------
+
+def account_for_reset(identifier: str) -> Optional[dict]:
+    """Find an account by username OR email (for the forgot-password flow)."""
+    ident = identifier.strip()
+    with _conn() as c:
+        row = c.execute(
+            "SELECT e.id, e.name, e.email FROM employees e "
+            "JOIN credentials c ON c.employee_id = e.id "
+            "WHERE c.username = ? OR LOWER(e.email) = LOWER(?) LIMIT 1",
+            (ident.lower(), ident),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def create_reset_token(employee_id: str) -> str:
+    token = secrets.token_urlsafe(32)
+    with _conn() as c:
+        c.execute("DELETE FROM password_resets WHERE employee_id = ?", (employee_id,))
+        c.execute("INSERT INTO password_resets VALUES (?,?,?)",
+                  (token, employee_id, dt.datetime.now().isoformat()))
+    return token
+
+
+def reset_token_employee(token: str, max_age_minutes: int = 60) -> Optional[str]:
+    """Return the employee_id for a valid, unexpired reset token, else None."""
+    if not token:
+        return None
+    with _conn() as c:
+        row = c.execute(
+            "SELECT employee_id, created_at FROM password_resets WHERE token = ?", (token,)
+        ).fetchone()
+    if not row:
+        return None
+    try:
+        created = dt.datetime.fromisoformat(row["created_at"])
+    except ValueError:
+        return None
+    if dt.datetime.now() - created > dt.timedelta(minutes=max_age_minutes):
+        return None
+    return row["employee_id"]
+
+
+def delete_reset_token(token: str) -> None:
+    with _conn() as c:
+        c.execute("DELETE FROM password_resets WHERE token = ?", (token,))
+
+
+def update_password(employee_id: str, new_password: str) -> None:
+    with _conn() as c:
+        c.execute("UPDATE credentials SET password_hash = ? WHERE employee_id = ?",
+                  (_hash(new_password), employee_id))
 
 
 def get_balances(employee_id: str) -> dict:

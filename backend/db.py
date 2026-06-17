@@ -352,6 +352,25 @@ def set_decision(req_id: str, status: str, comment: str = "") -> None:
         )
 
 
+def auto_approve_overdue_sick(max_days: float = 3.0):
+    """Auto-approve Sick leaves left Pending longer than max_days (SLA rule).
+    Returns (list of affected {id, employee_id}, the comment used)."""
+    cutoff = (dt.datetime.now() - dt.timedelta(days=max_days)).isoformat()
+    comment = f"Auto-approved - no manager action within {max_days:g} day(s)."
+    with _conn() as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT id, employee_id FROM leave_requests "
+            "WHERE code = 'SICK' AND status = 'Pending' AND created_at < ?",
+            (cutoff,),
+        ).fetchall()]
+        for r in rows:
+            c.execute(
+                "UPDATE leave_requests SET status = 'Approved', decision_comment = ? WHERE id = ?",
+                (comment, r["id"]),
+            )
+    return rows, comment
+
+
 def write_audit(employee_id: str, message: str, parsed: dict, validation: dict) -> None:
     with _conn() as c:
         c.execute(

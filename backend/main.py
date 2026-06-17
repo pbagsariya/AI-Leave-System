@@ -52,9 +52,21 @@ CODE_LABEL = {"SICK": "Sick Leave", "CASUAL": "Casual Leave", "EARNED": "Earned 
 PENDING: dict[str, list[str]] = {}
 
 
+def _sweep_auto_approvals() -> None:
+    """SLA rule: auto-approve Sick leaves pending longer than the threshold
+    (default 3 days; override with AUTO_APPROVE_SICK_DAYS, e.g. 0 to demo)."""
+    days = float(os.getenv("AUTO_APPROVE_SICK_DAYS", "3"))
+    rows, comment = db.auto_approve_overdue_sick(days)
+    for r in rows:
+        notify.notify_decision(db.get_employee(r["employee_id"]), r["id"], "Approved", comment)
+    if rows:
+        print(f"[auto-approve] {len(rows)} overdue sick leave(s) auto-approved")
+
+
 @app.on_event("startup")
 def _startup() -> None:
     db.init_db()
+    _sweep_auto_approvals()
     host = os.getenv("SMTP_HOST")
     if host:
         sender = os.getenv("SMTP_FROM") or os.getenv("SMTP_USER") or "?"
@@ -188,6 +200,7 @@ def current_manager(emp: str = Depends(current_emp)) -> str:
 
 @app.get("/api/approvals")
 def approvals(mgr: str = Depends(current_manager)):
+    _sweep_auto_approvals()
     return db.get_pending_requests(exclude_employee=mgr)
 
 
@@ -276,6 +289,7 @@ def balances(emp: str = Depends(current_emp)):
 
 @app.get("/api/history")
 def history(emp: str = Depends(current_emp)):
+    _sweep_auto_approvals()
     return db.get_history(emp)
 
 

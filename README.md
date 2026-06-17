@@ -52,7 +52,14 @@ every *other* employee's pending request, with **Approve** / **Reject** buttons.
 Approving marks the request Approved; rejecting marks it Rejected and returns the
 days to that employee's balance. The endpoints (`/api/approvals`, `/api/approve`,
 `/api/reject`) require the Manager role (403 otherwise). Asha is a seeded Manager;
-or sign up a new one.
+or sign up a new one. A manager comment can be added when approving/rejecting;
+it's stored, emailed to the employee, and shown in their history.
+
+**Sick-leave auto-approval (SLA)** — a **Sick** leave left pending longer than
+**3 days** with no manager action is auto-approved (with an explanatory comment +
+email). The check runs lazily whenever approvals/history are read. To demo it
+without waiting, lower the threshold: set `AUTO_APPROVE_SICK_DAYS=0` (in `.env`
+or the environment) and any pending sick leave is approved on the next read.
 
 **Email notifications** — signup includes an **Email** field. When a leave is
 submitted, the requester gets a confirmation email and every Manager gets an

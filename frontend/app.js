@@ -523,7 +523,7 @@ async function confirmDraft(cardEl) {
   cardEl.querySelectorAll('button').forEach(b => b.disabled = true);
   const res = await api.confirm({ session_id: sessionId });
   if (res.error) {
-    botRow(`<div class="bubble-bot border border-rose-200 bg-rose-50 text-rose-600">That draft expired — please tell me the leave again.</div>`, '⚠', 'bg-rose-500');
+    botRow(`<div class="bubble-bot border border-rose-200 bg-rose-50 text-rose-600">${esc(res.error)}</div>`, '⚠', 'bg-rose-500');
     return;
   }
   botRow(`<div class="bubble-bot border border-emerald-200 bg-emerald-50">

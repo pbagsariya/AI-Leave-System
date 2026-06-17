@@ -136,8 +136,9 @@ clarifying question. Real Claude handles all free-form phrasing.
 - **Approve / reject** (Managers) — review and act on the team's pending leave.
 
 Guardrails (deterministic, never the model): closed leave-code list, balance
-checks, the medical-certificate rule for sick leave > 2 days, and a
-confirmation gate — **nothing is submitted until you press Confirm**.
+checks, the medical-certificate rule for sick leave > 2 days, an **overlap check**
+(you can't apply for leave on dates that overlap an existing Pending/Approved
+request), and a confirmation gate — **nothing is submitted until you press Confirm**.
 
 ## Layout
 

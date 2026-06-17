@@ -312,6 +312,22 @@ def get_history(employee_id: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def get_overlapping_request(employee_id: str, start_date: str, end_date: str) -> Optional[dict]:
+    """Return an existing active (Pending/Approved) leave whose dates overlap
+    [start_date, end_date] for this employee, else None. Prevents double-booking
+    the same day across leave types."""
+    with _conn() as c:
+        row = c.execute(
+            "SELECT id, code, label FROM leave_requests "
+            "WHERE employee_id = ? AND status IN ('Pending', 'Approved') "
+            "AND start_date IS NOT NULL AND end_date IS NOT NULL "
+            "AND start_date <= ? AND end_date >= ? "
+            "ORDER BY created_at DESC LIMIT 1",
+            (employee_id, end_date, start_date),
+        ).fetchone()
+    return dict(row) if row else None
+
+
 def get_pending_requests(exclude_employee: Optional[str] = None) -> list[dict]:
     """All pending leave requests joined with the requester, newest first.
     Optionally excludes one employee (so a manager doesn't approve their own)."""

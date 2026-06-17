@@ -395,6 +395,15 @@ def chat(body: ChatIn, emp: str = Depends(current_emp)):
     PENDING.pop(emp, None)
 
     lr = parsed.leave_request
+    # block overlapping leave — can't apply twice for the same dates
+    if lr.start_date and lr.end_date:
+        conflict = db.get_overlapping_request(emp, lr.start_date, lr.end_date)
+        if conflict:
+            return {"reply_type": "policy_block",
+                    "message": f"You already have a {conflict['label']} request "
+                               f"({conflict['id']}) on those dates. You can't apply for "
+                               f"overlapping leave — please pick different dates."}
+
     same_day = lr.start_date == lr.end_date
     session_id = f"s{int(time.time()*1000)}"
     db.save_draft(session_id, emp, {
@@ -425,7 +434,15 @@ def confirm(body: ConfirmIn, emp: str = Depends(current_emp)):
         return {"error": "Managers cannot apply for leave"}
     draft = db.get_draft(body.session_id)
     if not draft or draft["employee_id"] != emp:
-        return {"error": "draft expired"}
+        return {"error": "That request expired — please tell me the leave again."}
+
+    # final overlap guard (in case a conflicting leave was submitted meanwhile)
+    if draft.get("start_date") and draft.get("end_date"):
+        conflict = db.get_overlapping_request(emp, draft["start_date"], draft["end_date"])
+        if conflict:
+            db.delete_draft(body.session_id)
+            return {"error": f"You already have a {conflict['label']} request "
+                             f"({conflict['id']}) on those dates — can't apply for overlapping leave."}
 
     PENDING.pop(emp, None)
     code = draft["code"]

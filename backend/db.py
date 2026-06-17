@@ -109,15 +109,17 @@ def _hash(password: str) -> str:
 # Demo roster (id, name, dept, role, email). Usernames are stored lowercase;
 # verify_login() lowercases input. Emails are placeholders — change them (or
 # sign up with a real address) to receive real notifications via SMTP.
-# Leave approvals route by DEPARTMENT: an employee's request goes to the
-# manager(s) in the same department. Two departments are seeded so this is
-# demonstrable — Engineering (mgr Asha) and Sales (mgr Ravi).
+# Leave approvals route by DEPARTMENT (the `dept` field): an employee's request
+# goes to the manager(s) in the same department. Roles must be exactly "Manager"
+# or "Employee". Seeded org:
+#   Team 1 — pmanager1 (mgr); Meera, pemployee1
+#   Team 2 — pmanager2 (mgr); pemployee2
 EMPLOYEES = [
-    ("e1", "pmanager1", "ING Home Manager1", "Manager1", "prakashatinfo@gmail.com"),
-    ("e2", "pmanager2", "ING Home Manager2", "Manager2", "prakash.bagsariya@gmail.com"),
-    ("e3", "Meera Iyer", "Developer", "Employee", "meera@example.com"),
-    ("e4", "pemployee1", "Lead Developer", "Employee1", "prpri2007@gmail.com"),
-    ("e5", "pemployee2", "Sr. Developer", "Employee2", "bagsariya.prakash@gmail.com"),
+    ("e1", "pmanager1", "Team 1", "Manager", "prakashatinfo@gmail.com"),
+    ("e2", "pmanager2", "Team 2", "Manager", "prakash.bagsariya@gmail.com"),
+    ("e3", "Meera Iyer", "Team 1", "Employee", "meera@example.com"),
+    ("e4", "pemployee1", "Team 1", "Employee", "prpri2007@gmail.com"),
+    ("e5", "pemployee2", "Team 2", "Employee", "bagsariya.prakash@gmail.com"),
 ]
 
 # Starting allotment granted to a freshly signed-up account.

@@ -11,11 +11,16 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 import secrets
 import sqlite3
 from typing import Optional
 
 DB_PATH = os.getenv("LEAVE_DB", os.path.join(os.path.dirname(__file__), "..", "leave.db"))
+# The canonical database this source file mirrors. Signups are written back into
+# db.py (REGISTERED_USERS) only when running against this DB — tests that point
+# LEAVE_DB elsewhere never touch the source file.
+_DEFAULT_DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "leave.db"))
 
 CODES = ["SICK", "CASUAL", "EARNED", "COMP_OFF"]
 
@@ -33,7 +38,7 @@ def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS employees (
                 id TEXT PRIMARY KEY, name TEXT, dept TEXT, timezone TEXT,
-                role TEXT DEFAULT 'Employee', email TEXT
+                role TEXT DEFAULT 'Employee', email TEXT, manager_id TEXT
             );
             CREATE TABLE IF NOT EXISTS balances (
                 employee_id TEXT, code TEXT, days REAL,
@@ -72,6 +77,8 @@ def init_db() -> None:
             c.execute("ALTER TABLE employees ADD COLUMN role TEXT DEFAULT 'Employee'")
         if "email" not in cols:
             c.execute("ALTER TABLE employees ADD COLUMN email TEXT")
+        if "manager_id" not in cols:
+            c.execute("ALTER TABLE employees ADD COLUMN manager_id TEXT")
         lr_cols = [r["name"] for r in c.execute("PRAGMA table_info(leave_requests)")]
         if "decision_comment" not in lr_cols:
             c.execute("ALTER TABLE leave_requests ADD COLUMN decision_comment TEXT")
@@ -79,13 +86,13 @@ def init_db() -> None:
         # idempotent: ensure every demo employee, balance, and login exists.
         # INSERT OR IGNORE adds new users to an existing leave.db without
         # touching current data (e.g. drawn-down balances stay as they are).
-        for eid, name, dept, role, email in EMPLOYEES:
-            c.execute("INSERT OR IGNORE INTO employees (id, name, dept, timezone, role, email) VALUES (?,?,?,?,?,?)",
-                      (eid, name, dept, "Asia/Kolkata", role, email))
-            # keep the seeded name/dept/role/email authoritative even on an older leave.db
-            c.execute("UPDATE employees SET name = ?, dept = ?, role = ?, email = ? WHERE id = ?",
-                      (name, dept, role, email, eid))
-            for code, days in BALANCES[eid].items():
+        for eid, name, dept, role, email, manager_id in EMPLOYEES:
+            c.execute("INSERT OR IGNORE INTO employees (id, name, dept, timezone, role, email, manager_id) VALUES (?,?,?,?,?,?,?)",
+                      (eid, name, dept, "Asia/Kolkata", role, email, manager_id))
+            # keep the seeded name/dept/role/email/manager authoritative even on an older leave.db
+            c.execute("UPDATE employees SET name = ?, dept = ?, role = ?, email = ?, manager_id = ? WHERE id = ?",
+                      (name, dept, role, email, manager_id, eid))
+            for code, days in BALANCES.get(eid, DEFAULT_NEW_BALANCES).items():
                 c.execute("INSERT OR IGNORE INTO balances VALUES (?,?,?)", (eid, code, days))
         for username, pw, eid in CREDS:
             # authoritative: keep seeded passwords/ids in sync even if they change
@@ -128,27 +135,45 @@ def _hash(password: str) -> str:
 # or "Employee". Seeded org:
 #   Team 1 — pmanager1 (mgr); Meera, pemployee1
 #   Team 2 — pmanager2 (mgr); pemployee2
+# Demo roster (id, name, dept, role, email, manager_id). Leave approvals route to
+# the employee's assigned manager_id (managers have manager_id = None). Accounts
+# created through the signup form are appended below the markers by
+# create_account() (it rewrites this file), so the roster here always mirrors
+# leave.db and accounts are recreated if leave.db is ever reset.
 EMPLOYEES = [
-    ("e1", "pmanager1", "IT", "Manager", "prakashatinfo@gmail.com"),
-    ("e2", "pmanager2", "R&D", "Manager", "prakash.bagsariya@gmail.com"),
-    ("e3", "pemployee1", "IT", "Employee", "prpri2007@gmail.com"),
-    ("e4", "pemployee2", "R&D", "Employee", "bagsariya.prakash@gmail.com"),
+    ("e1", "pmanager1", "IT", "Manager", "prakashatinfo@gmail.com", None),
+    ("e2", "pmanager2", "R&D", "Manager", "prakash.bagsariya@gmail.com", None),
+    ("e3", "pemployee1", "IT", "Employee", "prpri2007@gmail.com", "e1"),
+    ("e4", "pemployee2", "R&D", "Employee", "bagsariya.prakash@gmail.com", "e2"),
+    ("e5", "pemployee3", "IT", "Employee", "pbagsariya@gmail.com", "e1"),
+    ('e6', 'pemployee4', 'R&D', 'Employee', 'prakash.bagsariya@gmail.com', 'e2'),
+    ('e7', 'pemployee7', 'IT', 'Employee', 'pbagsariya@gmail.com', 'e1'),
+    # __NEW_EMPLOYEES__  signups are inserted directly above this line — keep the marker
 ]
 
-# Starting allotment granted to a freshly signed-up account.
+# Starting allotment granted to a freshly signed-up account. Any employee id not
+# listed in BALANCES below (e.g. a signup) is seeded with these defaults.
 DEFAULT_NEW_BALANCES = {"SICK": 10, "CASUAL": 8, "EARNED": 15, "COMP_OFF": 4}
+# __BALANCES_START__  auto-synced with leave.db on every balance change — do not edit by hand
 BALANCES = {
     "e1": {"SICK": 8, "CASUAL": 5, "EARNED": 12, "COMP_OFF": 2},
     "e2": {"SICK": 6, "CASUAL": 7, "EARNED": 9, "COMP_OFF": 1},
-    "e3": {"SICK": 10, "CASUAL": 4, "EARNED": 14, "COMP_OFF": 3},
+    "e3": {"SICK": 7, "CASUAL": 4, "EARNED": 14, "COMP_OFF": 3},
     "e4": {"SICK": 8, "CASUAL": 6, "EARNED": 12, "COMP_OFF": 2},
-    "e5": {"SICK": 9, "CASUAL": 5, "EARNED": 11, "COMP_OFF": 3},
+    "e5": {"SICK": 10, "CASUAL": 8, "EARNED": 15, "COMP_OFF": 4},
+    "e6": {"SICK": 10, "CASUAL": 8, "EARNED": 15, "COMP_OFF": 4},
+    "e7": {"SICK": 9, "CASUAL": 8, "EARNED": 15, "COMP_OFF": 4},
 }
+# __BALANCES_END__
 CREDS = [
     ("pmanager1", "pmanager123", "e1"),
     ("pmanager2", "pmanager456", "e2"),
     ("pemployee1", "pemployee123", "e3"),
     ("pemployee2", "pemployee456", "e4"),
+    ("pemployee3", "pemployee789", "e5"),
+    ('pemployee4', 'pemployee123', 'e6'),
+    ('pemployee7', 'pemployee77', 'e7'),
+    # __NEW_CREDS__  signups are inserted directly above this line — keep the marker
 ]
 
 
@@ -177,42 +202,57 @@ def _seed_history(c: sqlite3.Connection) -> None:
 
 def get_employees() -> list[dict]:
     with _conn() as c:
-        rows = c.execute("SELECT id, name, dept, role, email FROM employees ORDER BY name").fetchall()
+        rows = c.execute("SELECT id, name, dept, role, email, manager_id FROM employees ORDER BY name").fetchall()
     return [dict(r) for r in rows]
 
 
 def get_employee(employee_id: str) -> Optional[dict]:
     with _conn() as c:
-        row = c.execute("SELECT id, name, dept, role, email FROM employees WHERE id = ?", (employee_id,)).fetchone()
+        row = c.execute("SELECT id, name, dept, role, email, manager_id FROM employees WHERE id = ?", (employee_id,)).fetchone()
     return dict(row) if row else None
 
 
 def get_managers() -> list[dict]:
+    """All managers — used to populate the signup 'Manager Name' dropdown."""
     with _conn() as c:
-        rows = c.execute("SELECT id, name, email FROM employees WHERE role = 'Manager'").fetchall()
+        rows = c.execute("SELECT id, name, dept, email FROM employees WHERE role = 'Manager' ORDER BY name").fetchall()
     return [dict(r) for r in rows]
 
 
 def get_managers_for_employee(employee_id: str) -> list[dict]:
-    """Managers in the same department as the employee (their approvers)."""
+    """The employee's approver(s): their assigned manager_id when set, otherwise
+    a fall back to managers in the same department."""
     with _conn() as c:
-        erow = c.execute("SELECT dept FROM employees WHERE id = ?", (employee_id,)).fetchone()
-        dept = erow["dept"] if erow else None
+        erow = c.execute("SELECT dept, manager_id FROM employees WHERE id = ?", (employee_id,)).fetchone()
+        if not erow:
+            return []
+        if erow["manager_id"]:
+            rows = c.execute(
+                "SELECT id, name, email FROM employees WHERE id = ? AND role = 'Manager'",
+                (erow["manager_id"],),
+            ).fetchall()
+            if rows:
+                return [dict(r) for r in rows]
         rows = c.execute(
             "SELECT id, name, email FROM employees "
             "WHERE role = 'Manager' AND dept = ? AND id != ?",
-            (dept, employee_id),
+            (erow["dept"], employee_id),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def same_department(emp_a: str, emp_b: str) -> bool:
+def can_manage(manager_id: str, employee_id: str) -> bool:
+    """A manager may act on an employee's request when they are that employee's
+    assigned manager — or, for employees with no assigned manager, when they
+    share a department (legacy fallback)."""
     with _conn() as c:
-        rows = c.execute(
-            "SELECT dept FROM employees WHERE id IN (?, ?)", (emp_a, emp_b)
-        ).fetchall()
-    depts = {r["dept"] for r in rows}
-    return len(rows) == 2 and len(depts) == 1
+        erow = c.execute("SELECT dept, manager_id FROM employees WHERE id = ?", (employee_id,)).fetchone()
+        mrow = c.execute("SELECT dept, role FROM employees WHERE id = ?", (manager_id,)).fetchone()
+    if not erow or not mrow or mrow["role"] != "Manager":
+        return False
+    if erow["manager_id"]:
+        return erow["manager_id"] == manager_id
+    return erow["dept"] == mrow["dept"]
 
 
 def log_email(to_email: str, subject: str, body: str, status: str) -> None:
@@ -232,18 +272,127 @@ def username_exists(username: str) -> bool:
         ).fetchone() is not None
 
 
-def create_account(username: str, password: str, name: str, dept: str, role: str, email: str = "") -> str:
-    """Create an employee + balances + login. Returns the new employee_id."""
+_EMP_MARKER = "# __NEW_EMPLOYEES__"
+_CRED_MARKER = "# __NEW_CREDS__"
+
+
+def _next_employee_id() -> str:
+    """The next free e<N> id, based on the current EMPLOYEES roster."""
+    n = 0
+    for e in EMPLOYEES:
+        m = re.fullmatch(r"e(\d+)", e[0])
+        if m:
+            n = max(n, int(m.group(1)))
+    return f"e{n + 1}"
+
+
+def _append_signup_to_source(eid: str, name: str, dept: str, role: str,
+                             email: str, manager_id, username: str, password: str) -> None:
+    """Append a new signup to the EMPLOYEES and CREDS lists in this db.py so the
+    source roster mirrors leave.db (and the account is recreated if leave.db is
+    reset). Only runs against the canonical leave.db (skipped when LEAVE_DB points
+    elsewhere, e.g. tests). Best-effort: a failure never breaks account creation."""
+    if os.path.abspath(DB_PATH) != _DEFAULT_DB_PATH:
+        return
+    try:
+        emp_line = "    (%r, %r, %r, %r, %r, %r),\n" % (eid, name, dept, role, email, manager_id)
+        cred_line = "    (%r, %r, %r),\n" % (username, password, eid)
+        path = os.path.abspath(__file__)
+        with open(path, "r", encoding="utf-8") as f:
+            src = f.read()
+        for marker, line in ((_EMP_MARKER, emp_line), (_CRED_MARKER, cred_line)):
+            idx = src.find(marker)
+            if idx == -1:
+                continue
+            line_start = src.rfind("\n", 0, idx) + 1
+            src = src[:line_start] + line + src[line_start:]
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(src)
+        EMPLOYEES.append((eid, name, dept, role, email, manager_id))  # keep this process in sync
+        CREDS.append((username, password, eid))
+    except Exception as exc:  # never let source-sync break a signup
+        print(f"[db] could not sync new account to db.py: {exc}")
+
+
+_BAL_START = "# __BALANCES_START__"
+_BAL_END = "# __BALANCES_END__"
+_CODE_ORDER = ["SICK", "CASUAL", "EARNED", "COMP_OFF"]
+
+
+def _emp_sort_key(eid: str):
+    m = re.fullmatch(r"e(\d+)", eid)
+    return (0, int(m.group(1))) if m else (1, eid)
+
+
+def _num(v):
+    """Render a balance as an int when whole (8) else a float (0.5)."""
+    f = float(v)
+    return int(f) if f.is_integer() else f
+
+
+def _sync_balances_to_source() -> None:
+    """Rewrite the BALANCES dict in this db.py so it mirrors the live balances in
+    leave.db (called after every balance change / account creation). Only runs
+    against the canonical leave.db (skipped when LEAVE_DB points elsewhere).
+    Best-effort: a failure never breaks the leave flow."""
+    if os.path.abspath(DB_PATH) != _DEFAULT_DB_PATH:
+        return
+    try:
+        with _conn() as c:
+            rows = c.execute("SELECT employee_id, code, days FROM balances").fetchall()
+        bal: dict[str, dict] = {}
+        for r in rows:
+            bal.setdefault(r["employee_id"], {})[r["code"]] = r["days"]
+
+        lines = ["BALANCES = {"]
+        for eid in sorted(bal, key=_emp_sort_key):
+            codes = bal[eid]
+            order = [k for k in _CODE_ORDER if k in codes] + [k for k in codes if k not in _CODE_ORDER]
+            inner = ", ".join('"%s": %s' % (k, _num(codes[k])) for k in order)
+            lines.append('    "%s": {%s},' % (eid, inner))
+        lines.append("}")
+        block = "\n".join(lines) + "\n"
+
+        path = os.path.abspath(__file__)
+        with open(path, "r", encoding="utf-8") as f:
+            src = f.read()
+        i, j = src.find(_BAL_START), src.find(_BAL_END)
+        if i == -1 or j == -1:
+            return
+        block_start = src.find("\n", i) + 1          # just after the START marker line
+        block_end = src.rfind("\n", 0, j) + 1        # start of the END marker line
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(src[:block_start] + block + src[block_end:])
+
+        global BALANCES
+        BALANCES = {eid: dict(codes) for eid, codes in bal.items()}
+    except Exception as exc:  # never let source-sync break the leave flow
+        print(f"[db] could not sync BALANCES to db.py: {exc}")
+
+
+def create_account(username: str, password: str, name: str, dept: str, role: str,
+                   email: str = "", manager_id: Optional[str] = None) -> str:
+    """Create an employee + balances + login. Returns the new employee_id.
+
+    Employees carry a manager_id (their approver). The account is written to
+    leave.db AND appended to db.py's EMPLOYEES + CREDS lists so the two stay in
+    sync."""
     username = username.strip().lower()
-    eid = "u" + secrets.token_hex(4)
+    name = name.strip()
+    dept = dept.strip() or "—"
+    email = email.strip()
+    manager_id = (manager_id or None) if role != "Manager" else None
+    eid = _next_employee_id()
     with _conn() as c:
         c.execute(
-            "INSERT INTO employees (id, name, dept, timezone, role, email) VALUES (?,?,?,?,?,?)",
-            (eid, name.strip(), dept.strip() or "—", "Asia/Kolkata", role, email.strip()),
+            "INSERT INTO employees (id, name, dept, timezone, role, email, manager_id) VALUES (?,?,?,?,?,?,?)",
+            (eid, name, dept, "Asia/Kolkata", role, email, manager_id),
         )
         for code, days in DEFAULT_NEW_BALANCES.items():
             c.execute("INSERT INTO balances VALUES (?,?,?)", (eid, code, days))
         c.execute("INSERT INTO credentials VALUES (?,?,?)", (username, _hash(password), eid))
+    _append_signup_to_source(eid, name, dept, role, email, manager_id, username, password)
+    _sync_balances_to_source()   # add the new employee's balances to BALANCES in db.py
     return eid
 
 
@@ -369,8 +518,9 @@ def get_overlapping_request(employee_id: str, start_date: str, end_date: str) ->
 
 
 def get_pending_requests(manager_id: str) -> list[dict]:
-    """Pending leave requests this manager can act on: those from employees in
-    the manager's own department (excluding the manager), newest first."""
+    """Pending leave requests this manager can act on: those from employees who
+    report to them (manager_id), plus any unassigned employees in the manager's
+    own department (legacy fallback). Newest first."""
     with _conn() as c:
         mrow = c.execute("SELECT dept FROM employees WHERE id = ?", (manager_id,)).fetchone()
         dept = mrow["dept"] if mrow else None
@@ -378,9 +528,10 @@ def get_pending_requests(manager_id: str) -> list[dict]:
             "SELECT r.id, r.employee_id, e.name AS employee_name, e.dept AS dept, "
             "       r.code, r.label, r.duration_days, r.created_at "
             "FROM leave_requests r JOIN employees e ON e.id = r.employee_id "
-            "WHERE r.status = 'Pending' AND e.dept = ? AND r.employee_id != ? "
+            "WHERE r.status = 'Pending' AND r.employee_id != ? AND ("
+            "      e.manager_id = ? OR (e.manager_id IS NULL AND e.dept = ?)) "
             "ORDER BY r.created_at DESC",
-            (dept, manager_id),
+            (manager_id, manager_id, dept),
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -434,6 +585,7 @@ def decrement_balance(employee_id: str, code: str, days: float) -> None:
             "UPDATE balances SET days = days - ? WHERE employee_id = ? AND code = ?",
             (days, employee_id, code),
         )
+    _sync_balances_to_source()
 
 
 def credit_balance(employee_id: str, code: str, days: float) -> None:
@@ -442,6 +594,7 @@ def credit_balance(employee_id: str, code: str, days: float) -> None:
             "UPDATE balances SET days = days + ? WHERE employee_id = ? AND code = ?",
             (days, employee_id, code),
         )
+    _sync_balances_to_source()
 
 
 def get_request(req_id: str) -> Optional[dict]:

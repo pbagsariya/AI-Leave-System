@@ -95,6 +95,15 @@
             <svg class="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </div>
         </div>
+        <div id="suManagerWrap">
+          <label class="block text-xs font-medium text-slate-500 mb-1">Manager Name <span class="text-rose-500">*</span></label>
+          <div class="relative">
+            <select id="suManager" class="w-full appearance-none border border-slate-200 rounded-lg pl-3 pr-9 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30">
+              <option value="">Select your manager…</option>
+            </select>
+            <svg class="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+        </div>
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">Username <span class="text-rose-500">*</span></label>
           <input id="suUsername" type="text" required autocomplete="username" placeholder="at least 3 characters, no spaces" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
@@ -267,6 +276,6 @@
 
   </div>
 
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

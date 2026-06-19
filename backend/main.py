@@ -91,6 +91,7 @@ class SignupIn(BaseModel):
     password: str = ""
     confirm_password: str = ""
     role: str = "Employee"
+    manager_id: str = ""
 
 
 class ForgotIn(BaseModel):
@@ -171,10 +172,27 @@ def signup(body: SignupIn, response: Response):
         raise HTTPException(status_code=409, detail="That username is already taken")
 
     role = "Manager" if body.role == "Manager" else "Employee"
-    emp = db.create_account(username, pw, name, dept, role, email)
+    manager_id = body.manager_id.strip() or None
+    if role == "Employee":
+        if not manager_id:
+            raise HTTPException(status_code=400, detail="Please select your manager")
+        mgr = db.get_employee(manager_id)
+        if not mgr or mgr.get("role") != "Manager":
+            raise HTTPException(status_code=400, detail="Please select a valid manager")
+    else:
+        manager_id = None  # managers don't report to a manager
+
+    emp = db.create_account(username, pw, name, dept, role, email, manager_id)
     user = _start_session(emp, response)  # auto-login after signup
     notify.notify_registration(user)     # confirmation email
     return user
+
+
+@app.get("/api/managers")
+def managers():
+    """Public: the list of managers, for the signup 'Manager Name' dropdown."""
+    return [{"id": m["id"], "name": m["name"], "dept": m.get("dept", "")}
+            for m in db.get_managers()]
 
 
 @app.post("/api/login")
@@ -244,11 +262,11 @@ def approvals(mgr: str = Depends(current_manager)):
 
 
 def _can_manage(mgr: str, req: dict | None):
-    """A manager may only act on requests from their own department."""
+    """A manager may only act on requests from employees who report to them."""
     if not req or req["status"] != "Pending":
         return {"error": "Request is no longer pending"}
-    if not db.same_department(mgr, req["employee_id"]):
-        raise HTTPException(status_code=403, detail="That request belongs to another department")
+    if not db.can_manage(mgr, req["employee_id"]):
+        raise HTTPException(status_code=403, detail="That request is managed by someone else")
     return None
 
 

@@ -141,6 +141,7 @@ const mockApi = {
     delete mockDB.resets[token];
     return { ok: true };
   },
+  async managers() { return mockDB.employees.filter(e => e.role === 'Manager').map(e => ({ id: e.id, name: e.name, dept: e.dept })); },
   async signup({ name, dept, email, username, password, confirm_password, role }) {
     const u = (username || '').trim().toLowerCase();
     if (!name || !email || !dept || !u || !password) return { error: 'All fields are required' };
@@ -324,6 +325,7 @@ const realApi = {
     const d = await r.json().catch(() => ({}));
     return { error: d.detail || 'Could not reset password' };
   },
+  async managers() { const r = await fetch('/api/managers'); return r.ok ? r.json() : []; },
 
   async balances() { return (await fetch('/api/balances')).json(); },
   async history() { return (await fetch('/api/history')).json(); },
@@ -588,12 +590,32 @@ function showLogin() {
   $('#username').focus();
 }
 
+async function populateManagers() {
+  const sel = $('#suManager');
+  if (!sel) return;
+  try {
+    const mgrs = await api.managers();
+    sel.innerHTML = '<option value="">Select your manager…</option>' +
+      mgrs.map(m => `<option value="${esc(m.id)}">${esc(m.name)}${m.dept ? ' · ' + esc(m.dept) : ''}</option>`).join('');
+  } catch (e) {
+    sel.innerHTML = '<option value="">Select your manager…</option>';
+  }
+}
+
+// Manager Name only applies to Employees — show it for that role, hide for Manager.
+function syncManagerField() {
+  const isEmployee = ($('#suRole').value || 'Employee') === 'Employee';
+  $('#suManagerWrap').classList.toggle('hidden', !isEmployee);
+}
+
 function showSignup() {
   $('#app').classList.add('hidden');
   hideAuthViews();
   $('#signup').classList.remove('hidden');
   $('#signupError').classList.add('hidden');
   $('#suMatch').classList.add('hidden');
+  populateManagers();
+  syncManagerField();
   $('#suName').focus();
 }
 
@@ -675,6 +697,7 @@ async function doSignup(ev) {
   const username = $('#suUsername').value.trim();
   const pw = $('#suPassword').value;
   const cpw = $('#suConfirm').value;
+  const manager_id = role === 'Employee' ? ($('#suManager').value || '') : '';
 
   // client-side validation (server re-checks authoritatively)
   let msg = '';
@@ -682,6 +705,7 @@ async function doSignup(ev) {
   else if (!email) msg = 'Email is required';
   else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) msg = 'Please enter a valid email address';
   else if (!dept) msg = 'Department is required';
+  else if (role === 'Employee' && !manager_id) msg = 'Please select your manager';
   else if (!username) msg = 'Username is required';
   else if (username.includes(' ')) msg = 'Username cannot contain spaces';
   else if (username.length < 3) msg = 'Username must be at least 3 characters';
@@ -691,7 +715,7 @@ async function doSignup(ev) {
   else if (pw !== cpw) msg = 'Passwords do not match';
   if (msg) { err.textContent = msg; err.classList.remove('hidden'); return; }
 
-  const body = { name, dept, email, username, password: pw, confirm_password: cpw, role };
+  const body = { name, dept, email, username, password: pw, confirm_password: cpw, role, manager_id };
   btn.disabled = true; btn.textContent = 'Creating…';
   try {
     const res = await api.signup(body);
@@ -784,6 +808,7 @@ async function boot() {
   // auth screens
   $('#loginForm').addEventListener('submit', doLogin);
   $('#signupForm').addEventListener('submit', doSignup);
+  $('#suRole').addEventListener('change', syncManagerField);
   $('#suPassword').addEventListener('input', checkPwMatch);
   $('#suConfirm').addEventListener('input', checkPwMatch);
   $('#toSignup').addEventListener('click', showSignup);

@@ -410,6 +410,8 @@ function renderConfirmation(card, sessionId) {
   const balLine = card.balanceAfter !== null
     ? `<div class="flex justify-between py-1.5"><dt class="text-slate-500">${BAL_META[card.code]?.label||card.code} balance after</dt><dd class="font-medium">${card.balanceAfter} days</dd></div>` : '';
   const attLine = `<div class="flex justify-between py-1.5"><dt class="text-slate-500">Attachment</dt><dd class="font-medium">${card.attachment ? esc(card.attachment)+' ✓' : 'none'}</dd></div>`;
+  const noteLine = card.note
+    ? `<div class="px-4 pt-2.5 text-[11px] text-amber-700 bg-amber-50 border-b border-amber-100">📅 ${esc(card.note)}</div>` : '';
   botRow(`<div class="w-full max-w-md" data-card data-session="${sessionId}">
     <div class="bubble-bot mb-2">Here's what I'll submit — please confirm:</div>
     <div class="rounded-xl border border-slate-200 overflow-hidden">
@@ -417,6 +419,7 @@ function renderConfirmation(card, sessionId) {
         <span class="text-sm font-semibold text-brand-700">${esc(card.label)}</span>
         <span class="text-[11px] px-2 py-0.5 rounded-full bg-white text-brand-600 border border-brand-100">Draft</span>
       </div>
+      ${noteLine}
       <dl class="px-4 py-3 text-sm divide-y divide-slate-100">
         <div class="flex justify-between py-1.5"><dt class="text-slate-500">Dates</dt><dd class="font-medium text-right">${dates}</dd></div>
         <div class="flex justify-between py-1.5"><dt class="text-slate-500">Comment</dt><dd class="font-medium text-right max-w-[60%]">${esc(card.comment)}</dd></div>

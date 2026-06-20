@@ -41,6 +41,91 @@ DOC_REQUIRED_OVER_DAYS = {"SICK": 2.0}
 
 EMPLOYEE_TZ = "Asia/Kolkata"
 
+# National / company holidays (ISO date -> name). Together with Saturday and
+# Sunday these are NON-WORKING days: an employee can't apply for leave on them
+# and they're never counted in a leave's duration. Add company holidays here, or
+# append more at runtime via the HOLIDAYS env var (comma-separated YYYY-MM-DD).
+HOLIDAYS: dict[str, str] = {
+    "2026-01-26": "Republic Day",
+    "2026-08-15": "Independence Day",
+    "2026-10-02": "Gandhi Jayanti",
+}
+for _h in (os.getenv("HOLIDAYS") or "").split(","):
+    _h = _h.strip()
+    if _h:
+        HOLIDAYS.setdefault(_h, "Holiday")
+
+
+def is_working_day(d: dt.date) -> bool:
+    """A working day is Mon–Fri and not a holiday."""
+    return d.weekday() < 5 and d.isoformat() not in HOLIDAYS
+
+
+def _day_kind(d: dt.date) -> str:
+    """Why a day is non-working: 'Saturday', 'Sunday', or 'holiday (name)'."""
+    if d.isoformat() in HOLIDAYS:
+        return f"holiday ({HOLIDAYS[d.isoformat()]})"
+    return d.strftime("%A")
+
+
+def _fmt_day(iso: str) -> str:
+    return dt.date.fromisoformat(iso).strftime("%d %b %Y")
+
+
+def working_days(start_iso: str, end_iso: str) -> int:
+    """Count working days in [start, end] inclusive (excludes weekends/holidays)."""
+    s, e = dt.date.fromisoformat(start_iso), dt.date.fromisoformat(end_iso)
+    if e < s:
+        s, e = e, s
+    n, d = 0, s
+    while d <= e:
+        if is_working_day(d):
+            n += 1
+        d += dt.timedelta(days=1)
+    return n
+
+
+def excluded_days(start_iso: str, end_iso: str) -> list[tuple[str, str]]:
+    """The non-working days within [start, end] as (iso, kind) pairs."""
+    s, e = dt.date.fromisoformat(start_iso), dt.date.fromisoformat(end_iso)
+    if e < s:
+        s, e = e, s
+    out, d = [], s
+    while d <= e:
+        if not is_working_day(d):
+            out.append((d.isoformat(), _day_kind(d)))
+        d += dt.timedelta(days=1)
+    return out
+
+
+def adjust_for_working_days(parsed: "ParsedLeave"):
+    """Ignore weekends/national holidays in an apply-leave request.
+
+    Returns (ok, reason, excluded). For a multi-day request the leave_request's
+    duration_days is set to the working-day count (non-working days are not
+    deducted). When EVERY requested day is a weekend/holiday the request is
+    blocked (ok=False) — you can't apply for leave on a non-working day. WFH is
+    exempt (you may work from home as scheduled)."""
+    lr = parsed.leave_request
+    if parsed.intent != "apply_leave" or not lr.start_date or lr.absence_code == "WFH":
+        return True, "", []
+    start = lr.start_date
+    end = lr.end_date or lr.start_date
+    excl = excluded_days(start, end)
+    wd = working_days(start, end)
+    if wd == 0:
+        if start == end:
+            kind = _day_kind(dt.date.fromisoformat(start))
+            reason = (f"{_fmt_day(start)} is a {kind}. You can't apply for leave on a "
+                      "non-working day (weekend / national holiday).")
+        else:
+            reason = (f"Every day from {_fmt_day(start)} to {_fmt_day(end)} is a weekend / "
+                      "national holiday — you can't apply for leave on non-working days.")
+        return False, reason, excl
+    if start != end:
+        lr.duration_days = float(wd)   # count working days only
+    return True, "", excl
+
 
 # --------------------------------------------------------------------------
 # The structured contract the LLM must return (design doc section 5).
@@ -312,10 +397,10 @@ def validate(parsed: ParsedLeave, balances: dict) -> ValidationResult:
             )
 
     if lr.start_date:
+        # weekends/holidays are handled by adjust_for_working_days(); here we
+        # only confirm the date parses.
         try:
-            d = dt.date.fromisoformat(lr.start_date)
-            if d.weekday() >= 5 and code != "WFH":
-                warnings.append(f"{lr.start_date} falls on a weekend.")
+            dt.date.fromisoformat(lr.start_date)
         except ValueError:
             errors.append(f"Could not read start_date '{lr.start_date}'.")
 

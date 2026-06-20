@@ -408,6 +408,14 @@ def chat(body: ChatIn, emp: str = Depends(current_emp)):
         PENDING.pop(emp, None)
         return {"reply_type": "history", "history": db.get_history(emp)}
 
+    # ignore weekends / national holidays: exclude them from the duration, and
+    # block a request that lands entirely on non-working days.
+    ok_days, day_reason, excluded = L.adjust_for_working_days(parsed)
+    if not ok_days:
+        PENDING.pop(emp, None)
+        db.write_audit(emp, combined, parsed.model_dump(), {"blocked": day_reason})
+        return {"reply_type": "policy_block", "message": day_reason}
+
     result = L.validate(parsed, bal)
     db.write_audit(emp, combined, parsed.model_dump(), result.model_dump())
 
@@ -441,6 +449,10 @@ def chat(body: ChatIn, emp: str = Depends(current_emp)):
         "start_date": lr.start_date,
         "end_date": lr.end_date,
     })
+    note = None
+    if excluded:
+        note = (f"{len(excluded)} non-working day(s) excluded: "
+                + ", ".join(f"{_fmt_short(d)} ({k})" for d, k in excluded))
     card = {
         "code": lr.absence_code,
         "label": CODE_LABEL.get(lr.absence_code, lr.absence_code),
@@ -451,6 +463,7 @@ def chat(body: ChatIn, emp: str = Depends(current_emp)):
         "comment": lr.comments[:57] + "…" if len(lr.comments) > 60 else lr.comments,
         "attachment": "document.pdf" if lr.has_attachment else None,
         "balanceAfter": result.balance_after,
+        "note": note,
     }
     return {"reply_type": "confirmation", "session_id": session_id, "card": card}
 
